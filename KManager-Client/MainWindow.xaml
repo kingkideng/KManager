@@ -1,0 +1,29 @@
+<Window x:Class="KManager.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+        xmlns:tb="http://www.hardcodet.net/taskbar"
+        mc:Ignorable="d"
+        Title="KManager" Height="750" Width="900"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        ResizeMode="CanResizeWithGrip" WindowStartupLocation="CenterScreen">
+    <Border CornerRadius="12" Background="#1E1E1E" x:Name="MainBorder" ClipToBounds="True">
+        <Grid>
+            <tb:TaskbarIcon x:Name="TrayIcon"
+                            ToolTipText="KManager"
+                            TrayMouseDoubleClick="TrayIcon_TrayMouseDoubleClick">
+                <tb:TaskbarIcon.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem Header="显示主界面" Click="MenuShow_Click"/>
+                        <Separator/>
+                        <MenuItem Header="退出 (Exit)" Click="MenuExit_Click"/>
+                    </ContextMenu>
+                </tb:TaskbarIcon.ContextMenu>
+            </tb:TaskbarIcon>
+            <!-- WebView2 Content -->
+            <wv2:WebView2 Name="webView" Margin="0,0,0,0" DefaultBackgroundColor="Transparent" />
+        </Grid>
+    </Border>
+</Window>

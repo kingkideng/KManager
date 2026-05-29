@@ -1,0 +1,19 @@
+# Visual Studio
+.vs/
+*.user
+*.suo
+
+# Build results
+KManager-Client/bin/
+KManager-Client/obj/
+
+# Node
+KManager-UI/node_modules/
+KManager-UI/.next/
+KManager-UI/out/
+KManager-UI/.env.local
+
+# Runtime Caches
+KManager-Client/WebView2Cache/
+*.log
+*.tmp
