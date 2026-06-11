@@ -16,6 +16,7 @@ AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}/releases
 DefaultDirName={localappdata}\Programs\{#MyAppName}
+DisableDirPage=no
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 AllowNoIcons=yes
@@ -57,3 +58,76 @@ Name: "{userdesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+
+[Code]
+var
+  PreviousInstallDir: string;
+
+function SamePath(Path1: string; Path2: string): Boolean;
+begin
+  Result := CompareText(RemoveBackslashUnlessRoot(Path1), RemoveBackslashUnlessRoot(Path2)) = 0;
+end;
+
+procedure CopyDirectoryIfMissing(SourceDir: string; DestDir: string);
+var
+  FindRec: TFindRec;
+  SourcePath: string;
+  DestPath: string;
+begin
+  if not DirExists(SourceDir) then
+    Exit;
+
+  ForceDirectories(DestDir);
+
+  if FindFirst(AddBackslash(SourceDir) + '*', FindRec) then
+  begin
+    try
+      repeat
+        if (FindRec.Name <> '.') and (FindRec.Name <> '..') then
+        begin
+          SourcePath := AddBackslash(SourceDir) + FindRec.Name;
+          DestPath := AddBackslash(DestDir) + FindRec.Name;
+
+          if (FindRec.Attributes and FILE_ATTRIBUTE_DIRECTORY) <> 0 then
+            CopyDirectoryIfMissing(SourcePath, DestPath)
+          else if not FileExists(DestPath) then
+            FileCopy(SourcePath, DestPath, False);
+        end;
+      until not FindNext(FindRec);
+    finally
+      FindClose(FindRec);
+    end;
+  end;
+end;
+
+function InitializeSetup(): Boolean;
+begin
+  PreviousInstallDir := '';
+  RegQueryStringValue(
+    HKCU,
+    'Software\Microsoft\Windows\CurrentVersion\Uninstall\KManager_is1',
+    'InstallLocation',
+    PreviousInstallDir);
+  Result := True;
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  SourceDataDir: string;
+  DestDataDir: string;
+begin
+  if CurStep <> ssPostInstall then
+    Exit;
+
+  if PreviousInstallDir = '' then
+    Exit;
+
+  if SamePath(PreviousInstallDir, ExpandConstant('{app}')) then
+    Exit;
+
+  SourceDataDir := AddBackslash(PreviousInstallDir) + 'Data';
+  DestDataDir := ExpandConstant('{app}\Data');
+
+  if DirExists(SourceDataDir) and not FileExists(AddBackslash(DestDataDir) + 'accounts.json') then
+    CopyDirectoryIfMissing(SourceDataDir, DestDataDir);
+end;

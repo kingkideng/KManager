@@ -29,7 +29,7 @@ KManager 是一款面向 Battle.net 多账号用户的 Windows 桌面工具。�
 
 前往 [Releases](../../releases) 下载最新版本。
 
-推荐普通用户使用 `setup.exe` 安装包；如果下载的是绿色压缩包，也可以解压后直接运行 `KManager.exe`。
+推荐普通用户使用 `setup.exe` 安装包，安装时可以选择安装位置；如果下载的是绿色压缩包，也可以解压后直接运行 `KManager.exe`。
 
 ## 从 v1.0 升级
 
