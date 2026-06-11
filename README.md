@@ -4,54 +4,141 @@
   <img src="KManager-Client/logo.png" width="128" alt="KManager Logo" />
 </p>
 
-KManager 是一款拥有极简、高级 UI 设计的**战网（Battle.net）多账号无缝切换工具**。只需在官方战网客户端正常登录一次，即可提取并永久保存该账号的登录凭证。之后无论您有多少个国服/外服账号，都可以通过 KManager 实现**一键无缝秒切**，彻底告别繁琐的密码输入和安全令验证！
+KManager 是一款面向 Battle.net 多账号用户的 Windows 桌面工具。它通过保存和切换战网客户端本地会话配置，实现账号快速切换，不记录账号密码，不做内存注入。
 
-## ✨ 核心特性
+> 当前版本：v1.1.0
 
-- 🎨 **高级感 UI 设计**: 采用 Next.js + TailwindCSS + Framer Motion 构建的现代化前端界面，支持深浅色模式自动检测切换，拥有原生桌面级的丝滑拖拽与物理动画体验。
-- ⚡ **一键无缝切换**: 底层通过 C# 智能管理战网核心配置文件，切换账号如同本地切换文件夹一样迅速。
-- 🛡️ **安全可靠**: 不涉及任何内存注入或密码记录，完全基于战网官方的本地会话（Session）机制实现，绿色安全。
-- 🚀 **开机自启与静默托盘**: 支持开机自动隐藏到右下角托盘，随用随唤。
+## v1.1.0 更新重点
 
-## 📦 下载与安装
+- 账号分组：支持创建、重命名、删除分组，旧账号会自动进入“默认分组”。
+- 卡片管理：账号卡片左上角三点和右键菜单支持编辑账号信息、移动分组。
+- 单实例运行：重复打开 KManager 时会唤起已有窗口，不再多开多个实例。
+- 安装器升级兼容：v1.0 安装目录内的 `Data` 会自动迁移到用户数据目录。
+- 更适合 setup.exe：账号数据和 WebView2 缓存不再依赖程序安装目录。
 
-1. 前往 [Releases](../../releases) 页面下载最新版本。
-2. 解压到一个固定目录（建议不要放在包含中文或特殊字符的路径下）。
-3. 双击运行 `KManager.exe` 即可。
+## 核心特性
 
-## 🎮 使用说明
+- 高级桌面 UI：WPF + WebView2 外壳，Next.js + TailwindCSS + Motion 前端。
+- 一键切换账号：自动关闭战网客户端，替换本地会话配置并重新启动 Battle.net。
+- 分组管理：适合国服、外服、小号、亲友号、用途分类等场景。
+- 信息编辑：可随时修改账号备注、战网 ID 和所属分组。
+- 开机自启与托盘：支持最小化到托盘，随用随唤。
+- 安全边界清晰：不保存密码，不注入进程，只管理本地配置文件。
 
-1. **保存账号**：
-   - 先打开官方战网客户端，正常登录您的任意一个账号。
-   - 在 KManager 界面中点击右上角的 **“添加账号”** -> **“保存当前状态”**。
-   - 随意输入一个备注（例如：国服大号），点击确认即可永久保存。
-2. **切换账号**：
-   - 在列表中双击任意卡片，或点击卡片下方的“切换此号”，KManager 会自动帮您重启战网客户端并直接登入该账号。
-3. **登录新号**：
-   - 点击 **“添加账号”** -> **“前往登录新号”**，KManager 会强制关闭战网并清理当前登录状态，让您可以输入全新的账号密码进行登录。
+## 下载与安装
 
-## 🛠️ 本地开发与编译
+前往 [Releases](../../releases) 下载最新版本。
 
-本项目架构为 `C# WPF (WebView2)` + `Next.js`，包含前后端分离源码：
+推荐普通用户使用 `setup.exe` 安装包；如果下载的是绿色压缩包，也可以解压后直接运行 `KManager.exe`。
 
-1. **前端构建 (KManager-UI)**：
-   进入 `KManager-UI` 目录：
-   ```bash
-   npm install
-   npm run build
-   ```
-   将 `out` 目录下的所有文件复制到外层 C# 工程的 `wwwroot` 目录下。
+## 从 v1.0 升级
 
-2. **C# 客户端编译 (KManager-Client)**：
-   在安装了 .NET 8 SDK 的环境下进入 `KManager-Client` 运行：
-   ```bash
-   dotnet publish -c Release -r win-x64 --self-contained true
-   ```
+如果你是通过 `setup.exe` 安装的 v1.0：
 
-## 📄 许可协议
+1. 关闭 KManager 和战网客户端。
+2. 直接运行 v1.1 的 `setup.exe` 覆盖安装。
+3. 启动 KManager，旧账号会自动迁移到“默认分组”。
 
-本项目基于 [MIT License](LICENSE) 开源，您可以自由修改、分发和用于商业用途。
+v1.1 会把旧安装目录里的：
 
-## 🙏 鸣谢 (Credits)
+```text
+Data\
+```
 
-* **核心思路借鉴**: 感谢 [Watt Toolkit (原 Steam++)](https://github.com/BeyondDimension/SteamTools) 为战网本地 Session 切换机制提供的开源参考与灵感！
+自动复制到当前 Windows 用户目录：
+
+```text
+%LOCALAPPDATA%\KManager\Data
+```
+
+迁移只在新目录没有账号数据时执行，不会覆盖已经存在的新数据。旧安装目录里的 `Data` 不会被删除，可以作为备份。
+
+如果你使用绿色压缩包升级，也建议保留旧目录的 `Data` 文件夹；首次运行 v1.1 时同样会自动迁移。
+
+## 使用说明
+
+### 保存账号
+
+1. 打开官方 Battle.net 客户端并登录目标账号。
+2. 在 KManager 点击“添加账号”。
+3. 选择“保存当前状态”。
+4. 填写账号备注、战网 ID，并选择保存到哪个分组。
+
+### 切换账号
+
+双击账号卡片，或点击卡片底部的“切换此号”。KManager 会关闭 Battle.net 和 Agent 进程，替换本地会话配置，然后重新启动 Battle.net。
+
+### 管理分组
+
+- 点击“新建分组”创建分组。
+- 分组标题处可展开或折叠。
+- 非默认分组可重命名和删除。
+- 删除分组不会删除账号，组内账号会回到“默认分组”。
+
+### 编辑账号
+
+账号卡片左上角三点菜单或右键账号卡片，可以：
+
+- 编辑账号备注。
+- 编辑战网 ID。
+- 移动账号到其他分组。
+
+## 数据位置
+
+v1.1 起，用户数据默认保存在：
+
+```text
+%LOCALAPPDATA%\KManager\Data
+```
+
+其中：
+
+- `accounts.json` 保存账号备注、战网 ID、分组和最近使用时间。
+- `groups.json` 保存分组信息。
+- 每个账号目录内的 `Battle.net.config` 是该账号的本地会话配置副本。
+
+WebView2 缓存保存在：
+
+```text
+%LOCALAPPDATA%\KManager\WebView2Cache
+```
+
+## 本地开发与编译
+
+项目结构：
+
+```text
+KManager-Client  C# WPF / WebView2 桌面壳和系统能力
+KManager-UI      Next.js 静态前端
+```
+
+构建前端：
+
+```bash
+cd KManager-UI
+npm install
+npm run build
+```
+
+然后将 `KManager-UI/out` 内容复制到 `KManager-Client/wwwroot`。
+
+构建 Windows 客户端：
+
+```bash
+cd KManager-Client
+dotnet publish -c Release -r win-x64 --self-contained true
+```
+
+发布输出位于：
+
+```text
+KManager-Client/bin/Release/net8.0-windows/win-x64/publish
+```
+
+## 许可协议
+
+本项目基于 [MIT License](LICENSE) 开源。
+
+## 鸣谢
+
+核心思路参考了 [Watt Toolkit (原 Steam++)](https://github.com/BeyondDimension/SteamTools) 对战网本地 Session 切换机制的开源实践。

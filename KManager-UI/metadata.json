@@ -1,6 +1,6 @@
 {
-  "name": "",
-  "description": "",
+  "name": "KManager",
+  "description": "Battle.net account manager desktop UI",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": []
 }

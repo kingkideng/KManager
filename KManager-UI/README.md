@@ -1,20 +1,33 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# KManager UI
 
-# Run and deploy your AI Studio app
+KManager 的前端界面，使用 Next.js、TailwindCSS 和 Motion 构建，并通过 WebView2 嵌入到 `KManager-Client` 桌面壳中。
 
-This contains everything you need to run your app locally.
+## 本地开发
 
-View your app in AI Studio: https://ai.studio/apps/487c6ec4-09b2-4f3d-9c87-4942fe33e90f
+要求：
 
-## Run Locally
+- Node.js 20 或更高版本
 
-**Prerequisites:**  Node.js
+安装依赖：
 
+```bash
+npm install
+```
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+启动开发服务：
+
+```bash
+npm run dev
+```
+
+构建静态资源：
+
+```bash
+npm run build
+```
+
+构建完成后，将 `out` 目录复制到 `../KManager-Client/wwwroot`，桌面端即可加载最新界面。
+
+## 与桌面端通信
+
+前端通过 `window.chrome.webview.hostObjects.bridge` 调用 C# `WebBridge`，用于账号保存、切换、分组管理、编辑信息和应用设置。浏览器开发模式下会使用前端 mock 数据，方便单独调试界面。

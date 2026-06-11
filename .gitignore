@@ -6,6 +6,8 @@
 # Build results
 KManager-Client/bin/
 KManager-Client/obj/
+KManager-Client/Data/
+KManager-Client/publish/
 
 # Node
 KManager-UI/node_modules/
@@ -15,5 +17,10 @@ KManager-UI/.env.local
 
 # Runtime Caches
 KManager-Client/WebView2Cache/
+
+# Installer outputs
+Output/
+*.iss.tmp
+
 *.log
 *.tmp
