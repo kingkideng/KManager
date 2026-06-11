@@ -46,6 +46,11 @@ namespace KManager
             return _core.MoveAccountToGroup(accountId, groupId);
         }
 
+        public bool UpdateAccountInfo(string accountId, string remark, string battleTag)
+        {
+            return _core.UpdateAccountInfo(accountId, remark, battleTag);
+        }
+
         public bool SaveCurrentAccount(string remark, string battleTag)
         {
             return _core.SaveCurrentAccount(remark, battleTag);

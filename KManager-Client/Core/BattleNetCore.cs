@@ -155,6 +155,19 @@ namespace KManager.Core
             return true;
         }
 
+        public bool UpdateAccountInfo(string accountId, string remark, string battleTag)
+        {
+            var accounts = GetAccounts();
+            var account = accounts.FirstOrDefault(a => a.Id == accountId);
+            if (account == null)
+                return false;
+
+            account.Remark = string.IsNullOrWhiteSpace(remark) ? "未命名账号" : remark.Trim();
+            account.Username = (battleTag ?? "").Trim();
+            SaveAccounts(accounts);
+            return true;
+        }
+
         public bool SaveCurrentAccount(string remark, string battleTag)
         {
             return SaveCurrentAccountToGroup(remark, battleTag, DefaultGroupId);

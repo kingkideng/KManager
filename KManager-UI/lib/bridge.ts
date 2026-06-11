@@ -62,6 +62,14 @@ class MockBridge {
     return true;
   }
 
+  async UpdateAccountInfo(accountId: string, remark: string, battleTag: string): Promise<boolean> {
+    const account = this.accounts.find(a => a.Id === accountId);
+    if (!account) return false;
+    account.Remark = remark.trim() || '未命名账号';
+    account.Username = battleTag.trim();
+    return true;
+  }
+
   async SaveCurrentAccount(remark: string, battleTag: string): Promise<boolean> {
     return this.SaveCurrentAccountToGroup(remark, battleTag, 'default');
   }

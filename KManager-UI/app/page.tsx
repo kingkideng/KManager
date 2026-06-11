@@ -127,16 +127,17 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [autoStart, setAutoStart] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalMode, setModalMode] = useState<'select' | 'save'>('select');
+  const [modalMode, setModalMode] = useState<'select' | 'save' | 'edit'>('select');
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [avatars, setAvatars] = useState<Record<string, string>>({});
   const [remark, setRemark] = useState('');
   const [battleTag, setBattleTag] = useState('');
   const [saveGroupId, setSaveGroupId] = useState(DEFAULT_GROUP_ID);
+  const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [saveLoading, setSaveLoading] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [openMoveMenuId, setOpenMoveMenuId] = useState<string | null>(null);
+  const [openAccountMenuId, setOpenAccountMenuId] = useState<string | null>(null);
   const [draggingAccountId, setDraggingAccountId] = useState<string | null>(null);
   const expandedInitialized = useRef(false);
 
@@ -343,11 +344,11 @@ export default function App() {
   const moveAccountToGroup = async (accountId: string, groupId: string) => {
     const account = accounts.find(item => item.Id === accountId);
     if (!account || account.GroupId === groupId) {
-      setOpenMoveMenuId(null);
+      setOpenAccountMenuId(null);
       return;
     }
 
-    setOpenMoveMenuId(null);
+    setOpenAccountMenuId(null);
     ensureGroupExpanded(groupId);
     setAccounts(prev => prev.map(item => item.Id === accountId ? { ...item, GroupId: groupId } : item));
 
@@ -359,6 +360,60 @@ export default function App() {
       }
     } catch {
       await loadData();
+    }
+  };
+
+  const openEditAccount = (account: Account) => {
+    setOpenAccountMenuId(null);
+    setEditingAccountId(account.Id);
+    setRemark(account.Remark || '');
+    setBattleTag(account.Username || '');
+    setSaveGroupId(account.GroupId || DEFAULT_GROUP_ID);
+    setSaveError(null);
+    setModalMode('edit');
+    setIsModalOpen(true);
+  };
+
+  const updateAccountInfo = async () => {
+    if (!editingAccountId) return;
+
+    setSaveError(null);
+    setSaveLoading(true);
+    try {
+      const bridge = getBridge();
+      const nextRemark = remark.trim() || '未命名账号';
+      const nextBattleTag = battleTag.trim();
+      const targetGroupId = orderedGroups.some(group => group.Id === saveGroupId) ? saveGroupId : DEFAULT_GROUP_ID;
+      const currentAccount = accounts.find(account => account.Id === editingAccountId);
+
+      const success = await bridge.UpdateAccountInfo(editingAccountId, nextRemark, nextBattleTag);
+      if (!success) {
+        setSaveError('保存失败，请确认账号记录仍然存在。');
+        return;
+      }
+
+      if (currentAccount && currentAccount.GroupId !== targetGroupId) {
+        const moved = await bridge.MoveAccountToGroup(editingAccountId, targetGroupId);
+        if (!moved) {
+          setSaveError('账号信息已保存，但移动分组失败。');
+          await loadData();
+          return;
+        }
+      }
+
+      setAccounts(prev => prev.map(account => account.Id === editingAccountId
+        ? { ...account, Remark: nextRemark, Username: nextBattleTag, GroupId: targetGroupId }
+        : account));
+      ensureGroupExpanded(targetGroupId);
+      setIsModalOpen(false);
+      setEditingAccountId(null);
+      setRemark('');
+      setBattleTag('');
+      await loadData();
+    } catch {
+      setSaveError('发生了未知错误');
+    } finally {
+      setSaveLoading(false);
     }
   };
 
@@ -437,6 +492,7 @@ export default function App() {
       );
       if (success) {
         setIsModalOpen(false);
+        setEditingAccountId(null);
         setRemark('');
         setBattleTag('');
         ensureGroupExpanded(targetGroupId);
@@ -453,11 +509,27 @@ export default function App() {
 
   const openModal = () => {
     setModalMode('select');
+    setEditingAccountId(null);
     setRemark('');
     setBattleTag('');
     setSaveGroupId(expandedGroupIds.has(activeGroupId) ? activeGroupId : DEFAULT_GROUP_ID);
     setSaveError(null);
     setIsModalOpen(true);
+  };
+
+  const closeModal = () => {
+    if (saveLoading) return;
+    setIsModalOpen(false);
+    setEditingAccountId(null);
+    setSaveError(null);
+  };
+
+  const submitAccountForm = () => {
+    if (modalMode === 'edit') {
+      updateAccountInfo();
+      return;
+    }
+    saveCurrentAccount();
   };
 
   if (loading) {
@@ -640,6 +712,11 @@ export default function App() {
                                     }}
                                     onDragEndCapture={() => setDraggingAccountId(null)}
                                     onDoubleClick={() => switchAccount(acc.Id)}
+                                    onContextMenu={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      setOpenAccountMenuId(acc.Id);
+                                    }}
                                     className={`relative group/card rounded-[32px] p-6 border flex flex-col items-center justify-between transition-all duration-300 aspect-[3/4] min-h-[280px] max-h-[360px] select-none ${
                                       isDarkMode 
                                         ? (isActive ? 'bg-white/5 border-white/10 hover:bg-white/[0.08] ring-1 ring-white/10 shadow-emerald-500/5' : 'bg-white/[0.02] border-white/5 hover:bg-white/[0.04]') 
@@ -650,15 +727,28 @@ export default function App() {
                                       <button
                                         onClick={(e) => {
                                           e.stopPropagation();
-                                          setOpenMoveMenuId(openMoveMenuId === acc.Id ? null : acc.Id);
+                                          setOpenAccountMenuId(openAccountMenuId === acc.Id ? null : acc.Id);
                                         }}
                                         className={`w-7 h-7 rounded-full flex items-center justify-center opacity-0 group-hover/card:opacity-100 transition-all ${isDarkMode ? 'bg-black/30 text-white/50 hover:text-white hover:bg-white/10' : 'bg-white/80 text-black/40 hover:text-black hover:bg-black/5'}`}
-                                        title="移动到分组"
+                                        title="账号操作"
                                       >
                                         <MoreHorizontal className="w-4 h-4" />
                                       </button>
-                                      {openMoveMenuId === acc.Id && (
-                                        <div className={`absolute left-0 top-9 w-40 rounded-[14px] border p-1 shadow-xl backdrop-blur-xl ${isDarkMode ? 'bg-[#18181A]/95 border-white/10' : 'bg-white/95 border-black/10'}`}>
+                                      {openAccountMenuId === acc.Id && (
+                                        <div className={`absolute left-0 top-9 w-44 rounded-[14px] border p-1 shadow-xl backdrop-blur-xl ${isDarkMode ? 'bg-[#18181A]/95 border-white/10' : 'bg-white/95 border-black/10'}`}>
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              openEditAccount(acc);
+                                            }}
+                                            className={`w-full rounded-[10px] px-3 py-2 text-left text-[12px] font-semibold transition-colors ${isDarkMode ? 'hover:bg-white/10 text-white/90' : 'hover:bg-black/5 text-black/90'}`}
+                                          >
+                                            编辑信息
+                                          </button>
+                                          <div className={`my-1 h-px ${isDarkMode ? 'bg-white/10' : 'bg-black/10'}`} />
+                                          <div className={`px-3 py-1 text-[10px] font-bold tracking-widest uppercase ${isDarkMode ? 'text-white/35' : 'text-black/35'}`}>
+                                            移动到分组
+                                          </div>
                                           {orderedGroups.map(targetGroup => (
                                             <button
                                               key={targetGroup.Id}
@@ -789,7 +879,7 @@ export default function App() {
             exit={{ opacity: 0 }}
             className={`fixed inset-0 z-50 backdrop-blur-md flex items-end sm:items-center justify-center no-drag ${isDarkMode ? 'bg-black/80' : 'bg-black/40'}`}
           >
-            <div className="absolute inset-0" onClick={() => !saveLoading && setIsModalOpen(false)} />
+            <div className="absolute inset-0" onClick={closeModal} />
 
             <motion.div
               initial={{ y: "20%", opacity: 0, scale: 0.95 }}
@@ -804,10 +894,10 @@ export default function App() {
               
               <div className="flex justify-between items-center mb-6">
                 <h3 className={`text-[18px] font-semibold tracking-tight ${isDarkMode ? 'text-white' : 'text-black'}`}>
-                  {modalMode === 'select' ? '选择操作' : '录入账号'}
+                  {modalMode === 'select' ? '选择操作' : modalMode === 'edit' ? '编辑账号' : '录入账号'}
                 </h3>
                 <button 
-                  onClick={() => setIsModalOpen(false)}
+                  onClick={closeModal}
                   className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ${
                     isDarkMode ? 'bg-white/5 hover:bg-white/10 text-white/50' : 'bg-black/5 hover:bg-black/10 text-black/50'
                   }`}
@@ -896,7 +986,7 @@ export default function App() {
                     </div>
                     <div>
                       <label className={`block text-[11px] font-bold tracking-wider uppercase mb-2 ml-1 ${isDarkMode ? 'text-white/40' : 'text-black/40'}`}>
-                        保存到分组
+                        {modalMode === 'edit' ? '所属分组' : '保存到分组'}
                       </label>
                       <select
                         value={saveGroupId}
@@ -930,16 +1020,22 @@ export default function App() {
 
                   <div className="flex gap-3 mt-8 pb-1">
                     <button
-                      onClick={() => setModalMode('select')}
+                      onClick={() => {
+                        if (modalMode === 'edit') {
+                          closeModal();
+                        } else {
+                          setModalMode('select');
+                        }
+                      }}
                       className={`px-4 py-3.5 rounded-[16px] font-semibold text-[13px] transition-colors active:scale-[0.98] w-[30%] border ${
                         isDarkMode ? 'bg-white/5 hover:bg-white/10 text-white/80 border-white/5' : 'bg-black/5 hover:bg-black/10 text-black/80 border-transparent hover:border-black/5'
                       }`}
                       type="button"
                     >
-                      返回
+                      {modalMode === 'edit' ? '取消' : '返回'}
                     </button>
                     <button
-                      onClick={saveCurrentAccount}
+                      onClick={submitAccountForm}
                       disabled={saveLoading}
                       className={`flex-1 px-4 py-3.5 rounded-[16px] font-semibold text-[13px] transition-all active:scale-[0.98] flex items-center justify-center gap-2 ${
                         isDarkMode ? 'bg-white hover:bg-[#E5E5E7] text-black shadow-lg shadow-white/20' : 'bg-black hover:bg-[#1D1D1F] text-white shadow-lg shadow-black/20'
@@ -952,7 +1048,7 @@ export default function App() {
                           <span>处理中...</span>
                         </>
                       ) : (
-                        '确定保存'
+                        modalMode === 'edit' ? '保存修改' : '确定保存'
                       )}
                     </button>
                   </div>
