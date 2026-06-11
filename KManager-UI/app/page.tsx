@@ -1,12 +1,17 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
-import { getBridge, Account } from '@/lib/bridge';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { DragEvent } from 'react';
+import { getBridge, Account, Group } from '@/lib/bridge';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Play, Copy, Trash2, X, Sparkles, PlusCircle, Plus,
-  Loader2, Check, AlertCircle, Moon, Sun, Shield, Upload
+  Loader2, Check, AlertCircle, Moon, Sun, ChevronDown,
+  ChevronRight, FolderPlus, MoreHorizontal, Pencil
 } from 'lucide-react';
+
+const DEFAULT_GROUP_ID = 'default';
+const EXPANDED_GROUPS_KEY = 'kmanager_expanded_groups';
 
 const KLogoBrand = ({ isActive, isDarkMode }: { isActive: boolean; isDarkMode: boolean }) => (
   <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" className={`w-[115%] h-[115%] transition-all duration-500 origin-center ${!isActive ? 'opacity-40 grayscale saturate-0 scale-90' : 'scale-100'}`}>
@@ -77,14 +82,12 @@ const KLogoBrand = ({ isActive, isDarkMode }: { isActive: boolean; isDarkMode: b
       </filter>
     </defs>
 
-    {/* 圆角底座 */}
     <rect x="8" y="8" width="84" height="84" rx="22" 
           fill="url(#bgGradient)" 
           stroke="url(#silverRim)" strokeWidth="1"
           filter="url(#bgShadow)"
     />
 
-    {/* 金属字母 K */}
     <g filter={isDarkMode ? "url(#kBevelDark)" : "url(#kBevelLight)"}>
       <path d="M 35 30 L 35 70 M 67 30 L 45 50 L 67 70"
             fill="none"
@@ -119,40 +122,93 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
 
 export default function App() {
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [expandedGroupIds, setExpandedGroupIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [autoStart, setAutoStart] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<'select' | 'save'>('select');
   const [isDarkMode, setIsDarkMode] = useState(true);
-
-  // Avatars Map
   const [avatars, setAvatars] = useState<Record<string, string>>({});
-  const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
-
-  // Input states for saving account
   const [remark, setRemark] = useState('');
   const [battleTag, setBattleTag] = useState('');
+  const [saveGroupId, setSaveGroupId] = useState(DEFAULT_GROUP_ID);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [saveLoading, setSaveLoading] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [openMoveMenuId, setOpenMoveMenuId] = useState<string | null>(null);
+  const [draggingAccountId, setDraggingAccountId] = useState<string | null>(null);
+  const expandedInitialized = useRef(false);
 
-  const loadAccounts = async () => {
+  const activeAccount = accounts[0] ?? null;
+  const activeGroupId = activeAccount?.GroupId || DEFAULT_GROUP_ID;
+
+  const orderedGroups = useMemo(() => {
+    const next = [...groups];
+    if (!next.some(group => group.Id === DEFAULT_GROUP_ID)) {
+      next.unshift({ Id: DEFAULT_GROUP_ID, Name: '默认分组', CreatedAt: new Date(0).toISOString() });
+    }
+    return next.sort((a, b) => {
+      if (a.Id === DEFAULT_GROUP_ID) return -1;
+      if (b.Id === DEFAULT_GROUP_ID) return 1;
+      return new Date(a.CreatedAt).getTime() - new Date(b.CreatedAt).getTime();
+    });
+  }, [groups]);
+
+  const accountsByGroup = useMemo(() => {
+    const validGroupIds = new Set(orderedGroups.map(group => group.Id));
+    const buckets: Record<string, Account[]> = {};
+    for (const group of orderedGroups) buckets[group.Id] = [];
+    for (const account of accounts) {
+      const groupId = validGroupIds.has(account.GroupId) ? account.GroupId : DEFAULT_GROUP_ID;
+      buckets[groupId] = buckets[groupId] || [];
+      buckets[groupId].push(account);
+    }
+    return buckets;
+  }, [accounts, orderedGroups]);
+
+  const visibleAccounts = useMemo(() => {
+    return accounts.filter(account => expandedGroupIds.has(account.GroupId || DEFAULT_GROUP_ID));
+  }, [accounts, expandedGroupIds]);
+
+  const visibleAccountIds = useMemo(() => visibleAccounts.map(account => account.Id).join('|'), [visibleAccounts]);
+
+  const loadData = async () => {
     try {
       const bridge = getBridge();
-      const accountsJson = await bridge.GetAccounts();
-      const accs = JSON.parse(accountsJson) as Account[];
-      accs.sort((a, b) => new Date(b.LastUsed).getTime() - new Date(a.LastUsed).getTime());
-      setAccounts(accs);
-      
-      // Load avatars
-      const avs: Record<string, string> = {};
-      for (const a of accs) {
-        const stored = localStorage.getItem('avatar_' + a.Id);
-        if (stored) avs[a.Id] = stored;
+      const [accountsJson, groupsJson] = await Promise.all([
+        bridge.GetAccounts(),
+        bridge.GetGroups(),
+      ]);
+      const nextGroups = (JSON.parse(groupsJson) as Group[]).map(group => ({
+        ...group,
+        Name: group.Name || '未命名分组',
+      }));
+      const validGroupIds = new Set(nextGroups.map(group => group.Id));
+      validGroupIds.add(DEFAULT_GROUP_ID);
+      const nextAccounts = (JSON.parse(accountsJson) as Account[])
+        .map(account => ({
+          ...account,
+          GroupId: account.GroupId && validGroupIds.has(account.GroupId) ? account.GroupId : DEFAULT_GROUP_ID,
+        }))
+        .sort((a, b) => new Date(b.LastUsed).getTime() - new Date(a.LastUsed).getTime());
+
+      setGroups(nextGroups);
+      setAccounts(nextAccounts);
+
+      if (!expandedInitialized.current) {
+        let restored: string[] | null = null;
+        try {
+          restored = JSON.parse(localStorage.getItem(EXPANDED_GROUPS_KEY) || 'null');
+        } catch {}
+
+        const fallbackGroupId = nextAccounts[0]?.GroupId || DEFAULT_GROUP_ID;
+        const restoredSet = new Set((restored || []).filter(id => validGroupIds.has(id)));
+        setExpandedGroupIds(restoredSet.size > 0 ? restoredSet : new Set([fallbackGroupId]));
+        expandedInitialized.current = true;
       }
-      setAvatars(avs);
     } catch (e) {
-      console.error('Failed to load accounts', e);
+      console.error('Failed to load data', e);
     }
   };
 
@@ -165,7 +221,7 @@ export default function App() {
     const init = async () => {
       try {
         const bridge = getBridge();
-        await loadAccounts();
+        await loadData();
         const auto = await bridge.GetAutoStart();
         setAutoStart(auto);
       } catch (e) {
@@ -178,8 +234,141 @@ export default function App() {
     return () => matchMedia.removeEventListener('change', handleChange);
   }, []);
 
+  useEffect(() => {
+    if (!expandedInitialized.current) return;
+    localStorage.setItem(EXPANDED_GROUPS_KEY, JSON.stringify([...expandedGroupIds]));
+  }, [expandedGroupIds]);
+
+  useEffect(() => {
+    setAvatars(prev => {
+      let changed = false;
+      const next = { ...prev };
+      for (const account of visibleAccounts) {
+        if (!next[account.Id]) {
+          const stored = localStorage.getItem('avatar_' + account.Id);
+          if (stored) {
+            next[account.Id] = stored;
+            changed = true;
+          }
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [visibleAccountIds, visibleAccounts]);
+
   const toggleTheme = () => {
     setIsDarkMode(!isDarkMode);
+  };
+
+  const toggleGroup = (groupId: string) => {
+    setExpandedGroupIds(prev => {
+      const next = new Set(prev);
+      if (next.has(groupId)) {
+        next.delete(groupId);
+      } else {
+        next.add(groupId);
+      }
+      return next;
+    });
+  };
+
+  const ensureGroupExpanded = (groupId: string) => {
+    setExpandedGroupIds(prev => {
+      if (prev.has(groupId)) return prev;
+      const next = new Set(prev);
+      next.add(groupId);
+      return next;
+    });
+  };
+
+  const createGroup = async () => {
+    const name = window.prompt('输入新分组名称');
+    if (!name?.trim()) return;
+
+    try {
+      const bridge = getBridge();
+      const groupJson = await bridge.CreateGroup(name.trim());
+      const group = JSON.parse(groupJson) as Group | null;
+      if (group?.Id) {
+        ensureGroupExpanded(group.Id);
+        setSaveGroupId(group.Id);
+      }
+      await loadData();
+    } catch {
+      window.alert('创建分组失败');
+    }
+  };
+
+  const renameGroup = async (group: Group) => {
+    if (group.Id === DEFAULT_GROUP_ID) return;
+    const name = window.prompt('输入新的分组名称', group.Name);
+    if (!name?.trim() || name.trim() === group.Name) return;
+
+    try {
+      const bridge = getBridge();
+      const success = await bridge.RenameGroup(group.Id, name.trim());
+      if (!success) {
+        window.alert('重命名失败，可能存在同名分组。');
+        return;
+      }
+      await loadData();
+    } catch {
+      window.alert('重命名失败');
+    }
+  };
+
+  const deleteGroup = async (group: Group) => {
+    if (group.Id === DEFAULT_GROUP_ID) return;
+    if (!window.confirm(`删除分组“${group.Name}”？组内账号会移动到默认分组。`)) return;
+
+    try {
+      const bridge = getBridge();
+      const success = await bridge.DeleteGroup(group.Id);
+      if (!success) {
+        window.alert('删除分组失败');
+        return;
+      }
+      setExpandedGroupIds(prev => {
+        const next = new Set(prev);
+        next.delete(group.Id);
+        next.add(DEFAULT_GROUP_ID);
+        return next;
+      });
+      await loadData();
+    } catch {
+      window.alert('删除分组失败');
+    }
+  };
+
+  const moveAccountToGroup = async (accountId: string, groupId: string) => {
+    const account = accounts.find(item => item.Id === accountId);
+    if (!account || account.GroupId === groupId) {
+      setOpenMoveMenuId(null);
+      return;
+    }
+
+    setOpenMoveMenuId(null);
+    ensureGroupExpanded(groupId);
+    setAccounts(prev => prev.map(item => item.Id === accountId ? { ...item, GroupId: groupId } : item));
+
+    try {
+      const bridge = getBridge();
+      const success = await bridge.MoveAccountToGroup(accountId, groupId);
+      if (!success) {
+        await loadData();
+      }
+    } catch {
+      await loadData();
+    }
+  };
+
+  const handleDrop = async (groupId: string, e: DragEvent<HTMLElement>) => {
+    e.preventDefault();
+    const accountId = e.dataTransfer.getData('text/plain') || draggingAccountId;
+    setDraggingAccountId(null);
+    if (accountId) {
+      await moveAccountToGroup(accountId, groupId);
+    }
   };
 
   const handleToggleAutoStart = async (enabled: boolean) => {
@@ -187,7 +376,7 @@ export default function App() {
     try {
       const bridge = getBridge();
       await bridge.SetAutoStart(enabled);
-    } catch (e) { }
+    } catch {}
   };
 
   const copyToClipboard = (text: string, id: string) => {
@@ -200,8 +389,12 @@ export default function App() {
     try {
       const bridge = getBridge();
       await bridge.SwitchAccount(id);
-      await loadAccounts();
-    } catch (e) { }
+      setAccounts(prev => {
+        const next = prev.map(account => account.Id === id ? { ...account, LastUsed: new Date().toISOString() } : account);
+        return next.sort((a, b) => new Date(b.LastUsed).getTime() - new Date(a.LastUsed).getTime());
+      });
+      setTimeout(() => loadData(), 2500);
+    } catch {}
   };
 
   const deleteAccount = async (id: string) => {
@@ -210,8 +403,13 @@ export default function App() {
         const bridge = getBridge();
         await bridge.DeleteAccount(id);
         localStorage.removeItem('avatar_' + id);
-        await loadAccounts();
-      } catch (e) {}
+        setAccounts(prev => prev.filter(account => account.Id !== id));
+        setAvatars(prev => {
+          const next = { ...prev };
+          delete next[id];
+          return next;
+        });
+      } catch {}
     }, 150);
   };
 
@@ -231,19 +429,22 @@ export default function App() {
     setSaveLoading(true);
     try {
       const bridge = getBridge();
-      const success = await bridge.SaveCurrentAccount(
+      const targetGroupId = orderedGroups.some(group => group.Id === saveGroupId) ? saveGroupId : DEFAULT_GROUP_ID;
+      const success = await bridge.SaveCurrentAccountToGroup(
         remark.trim() || '新账号',
-        battleTag.trim()
+        battleTag.trim(),
+        targetGroupId
       );
       if (success) {
         setIsModalOpen(false);
         setRemark('');
         setBattleTag('');
-        await loadAccounts();
+        ensureGroupExpanded(targetGroupId);
+        await loadData();
       } else {
         setSaveError('保存失败，请确认您已在战网客户端完成登录。');
       }
-    } catch (e) {
+    } catch {
       setSaveError('发生了未知错误');
     } finally {
       setSaveLoading(false);
@@ -254,20 +455,9 @@ export default function App() {
     setModalMode('select');
     setRemark('');
     setBattleTag('');
+    setSaveGroupId(expandedGroupIds.has(activeGroupId) ? activeGroupId : DEFAULT_GROUP_ID);
     setSaveError(null);
     setIsModalOpen(true);
-  };
-
-  const handleAvatarUpload = (id: string, e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const base64 = ev.target?.result as string;
-      localStorage.setItem('avatar_' + id, base64);
-      setAvatars(prev => ({...prev, [id]: base64}));
-    };
-    reader.readAsDataURL(file);
   };
 
   if (loading) {
@@ -281,7 +471,6 @@ export default function App() {
   return (
     <div className={`w-full h-screen flex flex-col font-sans relative border-t shadow-2xl overflow-hidden transition-colors duration-500 ease-in-out ${isDarkMode ? 'dark bg-[#050505] text-[#F5F5F7] border-white/5' : 'bg-[#FAFAFC] text-[#1D1D1F] border-black/5'}`}>
       
-      {/* Title Bar */}
       <header 
         onMouseDown={(e) => {
           if ((e.target as HTMLElement).closest('.no-drag')) return;
@@ -325,17 +514,22 @@ export default function App() {
         </div>
       </header>
 
-      {/* Main Content Area */}
       <main className="flex-1 overflow-y-auto hide-scrollbar px-6 pt-8 pb-32 relative z-10">
         <div className="flex justify-between items-end mb-8 pt-2">
           <div>
             <h1 className="text-3xl font-bold tracking-tight mb-1">战网账号管家</h1>
-            <p className={`text-sm ${isDarkMode ? 'text-white/40' : 'text-black/40'}`}>无缝切换登录配置</p>
+            <p className={`text-sm ${isDarkMode ? 'text-white/40' : 'text-black/40'}`}>按分组管理并无缝切换登录配置</p>
           </div>
-          <button onClick={openModal} className={`px-4 py-2 font-semibold rounded-[14px] flex items-center space-x-2 border active:scale-95 transition-all text-sm no-drag ${isDarkMode ? 'bg-white text-black border-white/10 hover:bg-[#E5E5E7]' : 'bg-black text-white border-black/10 hover:bg-[#1D1D1F]'}`}>
-             <Plus className="w-4 h-4 stroke-[2.5]" />
-             <span>添加账号</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={createGroup} className={`px-3 py-2 font-semibold rounded-[14px] flex items-center space-x-2 border active:scale-95 transition-all text-sm no-drag ${isDarkMode ? 'bg-white/5 text-white border-white/10 hover:bg-white/10' : 'bg-white text-black border-black/10 hover:bg-black/5'}`}>
+              <FolderPlus className="w-4 h-4 stroke-[2.4]" />
+              <span>新建分组</span>
+            </button>
+            <button onClick={openModal} className={`px-4 py-2 font-semibold rounded-[14px] flex items-center space-x-2 border active:scale-95 transition-all text-sm no-drag ${isDarkMode ? 'bg-white text-black border-white/10 hover:bg-[#E5E5E7]' : 'bg-black text-white border-black/10 hover:bg-[#1D1D1F]'}`}>
+              <Plus className="w-4 h-4 stroke-[2.5]" />
+              <span>添加账号</span>
+            </button>
+          </div>
         </div>
 
         {accounts.length === 0 ? (
@@ -355,129 +549,238 @@ export default function App() {
             </p>
           </motion.div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
-            <AnimatePresence mode="popLayout">
-              {accounts.map((acc, index) => {
-                const isActive = index === 0;
-                const avatar = avatars[acc.Id];
-                
-                return (
-                  <motion.div
-                    layout
-                    initial={{ opacity: 0, y: 15, scale: 0.98 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.15 } }}
-                    transition={{ type: 'spring', bounce: 0.2, duration: 0.4, delay: index * 0.05 }}
-                    key={acc.Id}
-                    onDoubleClick={() => switchAccount(acc.Id)}
-                    className={`relative group rounded-[32px] p-6 border flex flex-col items-center justify-between transition-all duration-300 aspect-[3/4] min-h-[280px] max-h-[360px] select-none ${
-                      isDarkMode 
-                        ? (isActive ? 'bg-white/5 border-white/10 hover:bg-white/[0.08] ring-1 ring-white/10 shadow-emerald-500/5' : 'bg-white/[0.02] border-white/5 hover:bg-white/[0.04]') 
-                        : (isActive ? 'bg-white border-black/10 hover:border-black/20 ring-1 ring-black/5 shadow-lg shadow-black/5' : 'bg-black/[0.02] border-black/5 hover:bg-white hover:shadow-sm')
-                    }`}
-                  >
-                    {isActive && (
-                      <div className="absolute top-5 right-5 z-10 pointer-events-none">
-                        <div className="px-2.5 py-1 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 text-[9px] font-bold uppercase rounded-full tracking-widest backdrop-blur-md">Active</div>
-                      </div>
-                    )}
-                    
-                    <div className="flex flex-col items-center gap-3 w-full mt-4 relative z-10 flex-1">
-                      <div className="relative no-drag">
-                        <div className={`w-24 h-24 flex items-center justify-center flex-shrink-0 ${
-                          avatar 
-                            ? `rounded-[32px] border overflow-hidden shadow-lg ${isDarkMode 
-                                ? (isActive ? 'bg-[#002FA7]/20 border-[#002FA7]/40 shadow-[0_0_15px_rgba(0,47,167,0.3)]' : 'bg-[#1C1C1E] border-white/10') 
-                                : (isActive ? 'bg-[#002FA7]/10 border-[#002FA7]/30 shadow-inner' : 'bg-zinc-100 border-black/5')}`
-                            : 'overflow-visible drop-shadow-xl'
-                        }`}>
-                          {avatar ? (
-                            <>
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img src={avatar} alt="Avatar" className="w-full h-full object-cover" />
-                            </>
-                          ) : (
-                            <div className="flex items-center justify-center h-full w-full">
-                              <KLogoBrand isActive={isActive} isDarkMode={isDarkMode} />
-                            </div>
-                          )}
-                        </div>
-                      </div>
+          <div className="space-y-5">
+            {orderedGroups.map((group) => {
+              const groupAccounts = accountsByGroup[group.Id] || [];
+              const expanded = expandedGroupIds.has(group.Id);
+              const hasActive = activeGroupId === group.Id;
 
-                      <div className="w-full text-center px-1 mt-3 flex-1 flex flex-col justify-center">
-                        <h3 className={`text-[16px] font-bold truncate tracking-tight ${isDarkMode ? 'text-white/90' : 'text-black/90'}`}>{acc.Remark}</h3>
-                        {acc.Username ? (
-                          <div className="flex justify-center mt-1.5">
-                            <button
-                              onClick={(e) => { e.stopPropagation(); copyToClipboard(acc.Username, acc.Id); }}
-                              className="flex items-center gap-1.5 group/copy text-center transition-colors px-2 py-0.5 rounded-md hover:bg-black/5 dark:hover:bg-white/5"
-                              title="点击复制"
-                            >
-                              <span className={`text-[12px] font-mono truncate tracking-tight transition-colors ${isDarkMode ? 'text-white/40 group-hover/copy:text-white/80' : 'text-black/40 group-hover/copy:text-black/80'}`}>
-                                {acc.Username}
-                              </span>
-                              {copiedId === acc.Id ? (
-                                <Check className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
-                              ) : (
-                                <Copy className={`w-3 h-3 opacity-0 group-hover/copy:opacity-100 transition-opacity flex-shrink-0 ${isDarkMode ? 'text-white/30' : 'text-black/30'}`} />
-                              )}
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="h-[24px] mt-1.5" />
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="w-full flex-col flex gap-2 mt-2 relative z-20">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); switchAccount(acc.Id); }}
-                        className={`w-full py-3 rounded-[16px] font-semibold text-[13px] flex justify-center items-center gap-2 active:scale-[0.96] transition-all no-drag ${
-                          isActive 
-                            ? (isDarkMode ? 'bg-white hover:bg-[#E5E5E7] text-black shadow-lg' : 'bg-black text-white hover:bg-[#1D1D1F] shadow-md') 
-                            : (isDarkMode ? 'bg-white/5 hover:bg-white/10 border border-white/5 text-white/90' : 'bg-white border border-black/10 hover:bg-black/5 text-black hover:shadow-sm')
-                        }`}
-                      >
-                        {isActive ? (
-                          <>
-                            <Play className={`w-[12px] h-[12px] fill-current opacity-80`} />
-                            <span>立即进入</span>
-                          </>
-                        ) : (
-                          <span>切换此号</span>
-                        )}
-                      </button>
-                      
-                      {!isActive && (
-                         <button
-                           onClick={(e) => {
-                             e.stopPropagation();
-                             if (confirm('确定要删除这个账号记录吗？')) {
-                               deleteAccount(acc.Id);
-                             }
-                           }}
-                           className={`w-full py-2 text-[11px] font-medium flex items-center justify-center rounded-[16px] active:scale-[0.95] opacity-0 group-hover:opacity-100 transition-all no-drag ${
-                             isDarkMode ? 'text-red-400 hover:bg-red-500/10' : 'text-red-500 hover:bg-red-500/10'
-                           }`}
-                           title="删除账号"
-                         >
-                           <Trash2 className="w-3.5 h-3.5 mr-1.5" />
-                           删除记录
-                         </button>
+              return (
+                <section
+                  key={group.Id}
+                  onDragOver={(e) => {
+                    if (draggingAccountId) e.preventDefault();
+                  }}
+                  onDrop={(e) => handleDrop(group.Id, e)}
+                  className={`rounded-[24px] border transition-colors ${isDarkMode ? 'border-white/5 bg-white/[0.015]' : 'border-black/5 bg-black/[0.015]'}`}
+                >
+                  <div className={`flex items-center justify-between px-4 py-3 ${isDarkMode ? 'border-white/5' : 'border-black/5'} ${expanded ? 'border-b' : ''}`}>
+                    <button
+                      onClick={() => toggleGroup(group.Id)}
+                      className="flex min-w-0 flex-1 items-center gap-3 text-left no-drag"
+                    >
+                      <span className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${isDarkMode ? 'bg-white/5 text-white/60' : 'bg-white text-black/50 shadow-sm'}`}>
+                        {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                      </span>
+                      <span className="min-w-0">
+                        <span className={`block truncate text-[15px] font-bold ${isDarkMode ? 'text-white/90' : 'text-black/90'}`}>{group.Name}</span>
+                        <span className={`text-[11px] font-medium ${isDarkMode ? 'text-white/35' : 'text-black/35'}`}>{groupAccounts.length} 个账号</span>
+                      </span>
+                      {hasActive && (
+                        <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 text-[9px] font-bold uppercase rounded-full tracking-widest">
+                          Active
+                        </span>
+                      )}
+                    </button>
+                    <div className="flex items-center gap-1 no-drag">
+                      {group.Id !== DEFAULT_GROUP_ID && (
+                        <>
+                          <button
+                            onClick={() => renameGroup(group)}
+                            className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${isDarkMode ? 'text-white/40 hover:text-white hover:bg-white/10' : 'text-black/40 hover:text-black hover:bg-black/5'}`}
+                            title="重命名分组"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => deleteGroup(group)}
+                            className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${isDarkMode ? 'text-red-400/70 hover:bg-red-500/10' : 'text-red-500/70 hover:bg-red-500/10'}`}
+                            title="删除分组"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </>
                       )}
                     </div>
-                  </motion.div>
-                );
-              })}
-            </AnimatePresence>
+                  </div>
+
+                  <AnimatePresence initial={false}>
+                    {expanded && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="overflow-hidden"
+                      >
+                        {groupAccounts.length === 0 ? (
+                          <div className={`m-4 rounded-[18px] border border-dashed py-8 text-center text-[12px] font-medium ${isDarkMode ? 'border-white/10 text-white/30' : 'border-black/10 text-black/30'}`}>
+                            拖动账号到这里，或通过卡片菜单移动到此分组。
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6 p-4">
+                            <AnimatePresence mode="popLayout">
+                              {groupAccounts.map((acc, index) => {
+                                const isActive = activeAccount?.Id === acc.Id;
+                                const avatar = avatars[acc.Id];
+                                
+                                return (
+                                  <motion.div
+                                    layout
+                                    draggable
+                                    initial={{ opacity: 0, y: 15, scale: 0.98 }}
+                                    animate={{ opacity: draggingAccountId === acc.Id ? 0.45 : 1, y: 0, scale: 1 }}
+                                    exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.15 } }}
+                                    transition={{ type: 'spring', bounce: 0.2, duration: 0.4, delay: index * 0.03 }}
+                                    key={acc.Id}
+                                    onDragStartCapture={(e: DragEvent<HTMLDivElement>) => {
+                                      setDraggingAccountId(acc.Id);
+                                      e.dataTransfer.setData('text/plain', acc.Id);
+                                      e.dataTransfer.effectAllowed = 'move';
+                                    }}
+                                    onDragEndCapture={() => setDraggingAccountId(null)}
+                                    onDoubleClick={() => switchAccount(acc.Id)}
+                                    className={`relative group/card rounded-[32px] p-6 border flex flex-col items-center justify-between transition-all duration-300 aspect-[3/4] min-h-[280px] max-h-[360px] select-none ${
+                                      isDarkMode 
+                                        ? (isActive ? 'bg-white/5 border-white/10 hover:bg-white/[0.08] ring-1 ring-white/10 shadow-emerald-500/5' : 'bg-white/[0.02] border-white/5 hover:bg-white/[0.04]') 
+                                        : (isActive ? 'bg-white border-black/10 hover:border-black/20 ring-1 ring-black/5 shadow-lg shadow-black/5' : 'bg-black/[0.02] border-black/5 hover:bg-white hover:shadow-sm')
+                                    }`}
+                                  >
+                                    <div className="absolute top-5 left-5 z-30 no-drag">
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setOpenMoveMenuId(openMoveMenuId === acc.Id ? null : acc.Id);
+                                        }}
+                                        className={`w-7 h-7 rounded-full flex items-center justify-center opacity-0 group-hover/card:opacity-100 transition-all ${isDarkMode ? 'bg-black/30 text-white/50 hover:text-white hover:bg-white/10' : 'bg-white/80 text-black/40 hover:text-black hover:bg-black/5'}`}
+                                        title="移动到分组"
+                                      >
+                                        <MoreHorizontal className="w-4 h-4" />
+                                      </button>
+                                      {openMoveMenuId === acc.Id && (
+                                        <div className={`absolute left-0 top-9 w-40 rounded-[14px] border p-1 shadow-xl backdrop-blur-xl ${isDarkMode ? 'bg-[#18181A]/95 border-white/10' : 'bg-white/95 border-black/10'}`}>
+                                          {orderedGroups.map(targetGroup => (
+                                            <button
+                                              key={targetGroup.Id}
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                moveAccountToGroup(acc.Id, targetGroup.Id);
+                                              }}
+                                              disabled={targetGroup.Id === acc.GroupId}
+                                              className={`w-full truncate rounded-[10px] px-3 py-2 text-left text-[12px] font-medium transition-colors disabled:opacity-35 ${isDarkMode ? 'hover:bg-white/10 text-white/80' : 'hover:bg-black/5 text-black/80'}`}
+                                            >
+                                              {targetGroup.Name}
+                                            </button>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    {isActive && (
+                                      <div className="absolute top-5 right-5 z-10 pointer-events-none">
+                                        <div className="px-2.5 py-1 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 text-[9px] font-bold uppercase rounded-full tracking-widest backdrop-blur-md">Active</div>
+                                      </div>
+                                    )}
+                                    
+                                    <div className="flex flex-col items-center gap-3 w-full mt-4 relative z-10 flex-1">
+                                      <div className="relative no-drag">
+                                        <div className={`w-24 h-24 flex items-center justify-center flex-shrink-0 ${
+                                          avatar 
+                                            ? `rounded-[32px] border overflow-hidden shadow-lg ${isDarkMode 
+                                                ? (isActive ? 'bg-[#002FA7]/20 border-[#002FA7]/40 shadow-[0_0_15px_rgba(0,47,167,0.3)]' : 'bg-[#1C1C1E] border-white/10') 
+                                                : (isActive ? 'bg-[#002FA7]/10 border-[#002FA7]/30 shadow-inner' : 'bg-zinc-100 border-black/5')}`
+                                            : 'overflow-visible drop-shadow-xl'
+                                        }`}>
+                                          {avatar ? (
+                                            <img src={avatar} alt="Avatar" className="w-full h-full object-cover" />
+                                          ) : (
+                                            <div className="flex items-center justify-center h-full w-full">
+                                              <KLogoBrand isActive={isActive} isDarkMode={isDarkMode} />
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+
+                                      <div className="w-full text-center px-1 mt-3 flex-1 flex flex-col justify-center">
+                                        <h3 className={`text-[16px] font-bold truncate tracking-tight ${isDarkMode ? 'text-white/90' : 'text-black/90'}`}>{acc.Remark}</h3>
+                                        {acc.Username ? (
+                                          <div className="flex justify-center mt-1.5">
+                                            <button
+                                              onClick={(e) => { e.stopPropagation(); copyToClipboard(acc.Username, acc.Id); }}
+                                              className="flex items-center gap-1.5 group/copy text-center transition-colors px-2 py-0.5 rounded-md hover:bg-black/5 dark:hover:bg-white/5 no-drag"
+                                              title="点击复制"
+                                            >
+                                              <span className={`text-[12px] font-mono truncate tracking-tight transition-colors ${isDarkMode ? 'text-white/40 group-hover/copy:text-white/80' : 'text-black/40 group-hover/copy:text-black/80'}`}>
+                                                {acc.Username}
+                                              </span>
+                                              {copiedId === acc.Id ? (
+                                                <Check className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
+                                              ) : (
+                                                <Copy className={`w-3 h-3 opacity-0 group-hover/copy:opacity-100 transition-opacity flex-shrink-0 ${isDarkMode ? 'text-white/30' : 'text-black/30'}`} />
+                                              )}
+                                            </button>
+                                          </div>
+                                        ) : (
+                                          <div className="h-[24px] mt-1.5" />
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    <div className="w-full flex-col flex gap-2 mt-2 relative z-20">
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); switchAccount(acc.Id); }}
+                                        className={`w-full py-3 rounded-[16px] font-semibold text-[13px] flex justify-center items-center gap-2 active:scale-[0.96] transition-all no-drag ${
+                                          isActive 
+                                            ? (isDarkMode ? 'bg-white hover:bg-[#E5E5E7] text-black shadow-lg' : 'bg-black text-white hover:bg-[#1D1D1F] shadow-md') 
+                                            : (isDarkMode ? 'bg-white/5 hover:bg-white/10 border border-white/5 text-white/90' : 'bg-white border border-black/10 hover:bg-black/5 text-black hover:shadow-sm')
+                                        }`}
+                                      >
+                                        {isActive ? (
+                                          <>
+                                            <Play className={`w-[12px] h-[12px] fill-current opacity-80`} />
+                                            <span>立即进入</span>
+                                          </>
+                                        ) : (
+                                          <span>切换此号</span>
+                                        )}
+                                      </button>
+                                      
+                                      {!isActive && (
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (confirm('确定要删除这个账号记录吗？')) {
+                                              deleteAccount(acc.Id);
+                                            }
+                                          }}
+                                          className={`w-full py-2 text-[11px] font-medium flex items-center justify-center rounded-[16px] active:scale-[0.95] opacity-0 group-hover/card:opacity-100 transition-all no-drag ${
+                                            isDarkMode ? 'text-red-400 hover:bg-red-500/10' : 'text-red-500 hover:bg-red-500/10'
+                                          }`}
+                                          title="删除账号"
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+                                          删除记录
+                                        </button>
+                                      )}
+                                    </div>
+                                  </motion.div>
+                                );
+                              })}
+                            </AnimatePresence>
+                          </div>
+                        )}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </section>
+              );
+            })}
           </div>
         )}
       </main>
 
-      {/* Subtle Vignette Background */}
       <div className={`fixed inset-0 pointer-events-none ring-[40px] inset-shadow-xl z-0 transition-colors duration-500 ${isDarkMode ? 'ring-black/20' : 'ring-white/40'}`}></div>
 
-      {/* Modal Backdrop & Container */}
       <AnimatePresence>
         {isModalOpen && (
           <motion.div
@@ -486,7 +789,6 @@ export default function App() {
             exit={{ opacity: 0 }}
             className={`fixed inset-0 z-50 backdrop-blur-md flex items-end sm:items-center justify-center no-drag ${isDarkMode ? 'bg-black/80' : 'bg-black/40'}`}
           >
-            {/* Modal Click-away overlay */}
             <div className="absolute inset-0" onClick={() => !saveLoading && setIsModalOpen(false)} />
 
             <motion.div
@@ -591,6 +893,24 @@ export default function App() {
                             : 'bg-white border-black/10 focus:border-black/20 focus:ring-4 focus:ring-black/5 text-black placeholder:text-black/30 shadow-inner'
                         }`}
                       />
+                    </div>
+                    <div>
+                      <label className={`block text-[11px] font-bold tracking-wider uppercase mb-2 ml-1 ${isDarkMode ? 'text-white/40' : 'text-black/40'}`}>
+                        保存到分组
+                      </label>
+                      <select
+                        value={saveGroupId}
+                        onChange={(e) => setSaveGroupId(e.target.value)}
+                        className={`w-full px-4 py-3.5 rounded-[16px] border transition-all text-[14px] outline-none font-medium ${
+                          isDarkMode 
+                            ? 'bg-[#18181A] border-white/10 focus:bg-white/10 focus:border-white/20 text-white' 
+                            : 'bg-white border-black/10 focus:border-black/20 focus:ring-4 focus:ring-black/5 text-black shadow-inner'
+                        }`}
+                      >
+                        {orderedGroups.map(group => (
+                          <option key={group.Id} value={group.Id}>{group.Name}</option>
+                        ))}
+                      </select>
                     </div>
                   </div>
 

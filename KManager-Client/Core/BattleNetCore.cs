@@ -14,13 +14,25 @@ namespace KManager.Core
         public string Remark { get; set; } = "";
         public string Username { get; set; } = "";
         public DateTime LastUsed { get; set; } = DateTime.Now;
+        public string GroupId { get; set; } = BattleNetCore.DefaultGroupId;
+    }
+
+    public class GroupInfo
+    {
+        public string Id { get; set; } = Guid.NewGuid().ToString("N");
+        public string Name { get; set; } = "";
+        public DateTime CreatedAt { get; set; } = DateTime.Now;
     }
 
     public class BattleNetCore
     {
+        public const string DefaultGroupId = "default";
+        private const string DefaultGroupName = "默认分组";
+
         private readonly string _appDataPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Battle.net");
         private readonly string _dataDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data");
         private readonly string _accountsJsonPath;
+        private readonly string _groupsJsonPath;
         private readonly string _configFilePath;
         private const string RegistryKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
         private const string AppName = "KManager";
@@ -29,6 +41,7 @@ namespace KManager.Core
         {
             _configFilePath = Path.Combine(_appDataPath, "Battle.net.config");
             _accountsJsonPath = Path.Combine(_dataDir, "accounts.json");
+            _groupsJsonPath = Path.Combine(_dataDir, "groups.json");
             if (!Directory.Exists(_dataDir))
                 Directory.CreateDirectory(_dataDir);
         }
@@ -40,7 +53,11 @@ namespace KManager.Core
             try
             {
                 var json = File.ReadAllText(_accountsJsonPath);
-                return JsonSerializer.Deserialize<List<AccountInfo>>(json) ?? new List<AccountInfo>();
+                var accounts = JsonSerializer.Deserialize<List<AccountInfo>>(json) ?? new List<AccountInfo>();
+                var changed = NormalizeAccounts(accounts);
+                if (changed)
+                    SaveAccounts(accounts);
+                return accounts;
             }
             catch
             {
@@ -50,16 +67,111 @@ namespace KManager.Core
 
         private void SaveAccounts(List<AccountInfo> accounts)
         {
+            NormalizeAccounts(accounts);
             File.WriteAllText(_accountsJsonPath, JsonSerializer.Serialize(accounts));
         }
 
+        public List<GroupInfo> GetGroups()
+        {
+            var groups = ReadGroups();
+            SaveGroups(groups);
+            return groups;
+        }
+
+        public GroupInfo? CreateGroup(string name)
+        {
+            name = NormalizeGroupName(name);
+            if (string.IsNullOrEmpty(name))
+                return null;
+
+            var groups = ReadGroups();
+            var existing = groups.FirstOrDefault(g => string.Equals(g.Name, name, StringComparison.OrdinalIgnoreCase));
+            if (existing != null)
+                return existing;
+
+            var group = new GroupInfo { Name = name };
+            groups.Add(group);
+            SaveGroups(groups);
+            return group;
+        }
+
+        public bool RenameGroup(string id, string name)
+        {
+            if (id == DefaultGroupId)
+                return false;
+
+            name = NormalizeGroupName(name);
+            if (string.IsNullOrEmpty(name))
+                return false;
+
+            var groups = ReadGroups();
+            if (groups.Any(g => g.Id != id && string.Equals(g.Name, name, StringComparison.OrdinalIgnoreCase)))
+                return false;
+
+            var group = groups.FirstOrDefault(g => g.Id == id);
+            if (group == null)
+                return false;
+
+            group.Name = name;
+            SaveGroups(groups);
+            return true;
+        }
+
+        public bool DeleteGroup(string id)
+        {
+            if (string.IsNullOrEmpty(id) || id == DefaultGroupId)
+                return false;
+
+            var groups = ReadGroups();
+            var removed = groups.RemoveAll(g => g.Id == id) > 0;
+            if (!removed)
+                return false;
+
+            SaveGroups(groups);
+
+            var accounts = GetAccounts();
+            var accountChanged = false;
+            foreach (var account in accounts.Where(a => a.GroupId == id))
+            {
+                account.GroupId = DefaultGroupId;
+                accountChanged = true;
+            }
+            if (accountChanged)
+                SaveAccounts(accounts);
+
+            return true;
+        }
+
+        public bool MoveAccountToGroup(string accountId, string groupId)
+        {
+            groupId = EnsureValidGroupId(groupId);
+            var accounts = GetAccounts();
+            var account = accounts.FirstOrDefault(a => a.Id == accountId);
+            if (account == null)
+                return false;
+
+            account.GroupId = groupId;
+            SaveAccounts(accounts);
+            return true;
+        }
+
         public bool SaveCurrentAccount(string remark, string battleTag)
+        {
+            return SaveCurrentAccountToGroup(remark, battleTag, DefaultGroupId);
+        }
+
+        public bool SaveCurrentAccountToGroup(string remark, string battleTag, string groupId)
         {
             if (!File.Exists(_configFilePath))
                 return false;
 
             var accounts = GetAccounts();
-            var newAccount = new AccountInfo { Remark = remark, Username = battleTag };
+            var newAccount = new AccountInfo
+            {
+                Remark = remark,
+                Username = battleTag,
+                GroupId = EnsureValidGroupId(groupId)
+            };
 
             string accountDir = Path.Combine(_dataDir, newAccount.Id);
             Directory.CreateDirectory(accountDir);
@@ -137,8 +249,9 @@ namespace KManager.Core
             try {
                 using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(RegistryKeyPath, true);
                 if (enabled) {
-                    var exePath = System.Diagnostics.Process.GetCurrentProcess().MainModule.FileName;
-                    key?.SetValue(AppName, exePath);
+                    var exePath = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName;
+                    if (!string.IsNullOrEmpty(exePath))
+                        key?.SetValue(AppName, exePath);
                 } else {
                     key?.DeleteValue(AppName, false);
                 }
@@ -181,6 +294,97 @@ namespace KManager.Core
                 }
             }
             catch { }
+        }
+
+        private List<GroupInfo> ReadGroups()
+        {
+            try
+            {
+                if (!File.Exists(_groupsJsonPath))
+                    return new List<GroupInfo> { CreateDefaultGroup() };
+
+                var json = File.ReadAllText(_groupsJsonPath);
+                var groups = JsonSerializer.Deserialize<List<GroupInfo>>(json) ?? new List<GroupInfo>();
+                NormalizeGroups(groups);
+                return groups;
+            }
+            catch
+            {
+                return new List<GroupInfo> { CreateDefaultGroup() };
+            }
+        }
+
+        private void SaveGroups(List<GroupInfo> groups)
+        {
+            NormalizeGroups(groups);
+            File.WriteAllText(_groupsJsonPath, JsonSerializer.Serialize(groups));
+        }
+
+        private static GroupInfo CreateDefaultGroup()
+        {
+            return new GroupInfo
+            {
+                Id = DefaultGroupId,
+                Name = DefaultGroupName,
+                CreatedAt = DateTime.MinValue
+            };
+        }
+
+        private static void NormalizeGroups(List<GroupInfo> groups)
+        {
+            groups.RemoveAll(g => string.IsNullOrWhiteSpace(g.Id));
+
+            var defaultGroup = groups.FirstOrDefault(g => g.Id == DefaultGroupId);
+            if (defaultGroup == null)
+            {
+                groups.Insert(0, CreateDefaultGroup());
+            }
+            else
+            {
+                defaultGroup.Name = DefaultGroupName;
+                defaultGroup.CreatedAt = DateTime.MinValue;
+                groups.Remove(defaultGroup);
+                groups.Insert(0, defaultGroup);
+            }
+
+            foreach (var group in groups)
+            {
+                group.Name = NormalizeGroupName(group.Name);
+                if (string.IsNullOrEmpty(group.Name))
+                    group.Name = "未命名分组";
+            }
+        }
+
+        private bool NormalizeAccounts(List<AccountInfo> accounts)
+        {
+            var groups = ReadGroups();
+            var validGroupIds = groups.Select(g => g.Id).ToHashSet();
+            var changed = false;
+
+            foreach (var account in accounts)
+            {
+                if (string.IsNullOrEmpty(account.GroupId) || !validGroupIds.Contains(account.GroupId))
+                {
+                    account.GroupId = DefaultGroupId;
+                    changed = true;
+                }
+            }
+
+            return changed;
+        }
+
+        private string EnsureValidGroupId(string groupId)
+        {
+            if (string.IsNullOrEmpty(groupId))
+                return DefaultGroupId;
+
+            var groups = ReadGroups();
+            return groups.Any(g => g.Id == groupId) ? groupId : DefaultGroupId;
+        }
+
+        private static string NormalizeGroupName(string name)
+        {
+            return (name ?? "").Trim();
         }
     }
 }

@@ -21,9 +21,39 @@ namespace KManager
             return JsonSerializer.Serialize(_core.GetAccounts());
         }
 
+        public string GetGroups()
+        {
+            return JsonSerializer.Serialize(_core.GetGroups());
+        }
+
+        public string CreateGroup(string name)
+        {
+            return JsonSerializer.Serialize(_core.CreateGroup(name));
+        }
+
+        public bool RenameGroup(string id, string name)
+        {
+            return _core.RenameGroup(id, name);
+        }
+
+        public bool DeleteGroup(string id)
+        {
+            return _core.DeleteGroup(id);
+        }
+
+        public bool MoveAccountToGroup(string accountId, string groupId)
+        {
+            return _core.MoveAccountToGroup(accountId, groupId);
+        }
+
         public bool SaveCurrentAccount(string remark, string battleTag)
         {
             return _core.SaveCurrentAccount(remark, battleTag);
+        }
+
+        public bool SaveCurrentAccountToGroup(string remark, string battleTag, string groupId)
+        {
+            return _core.SaveCurrentAccountToGroup(remark, battleTag, groupId);
         }
 
         public void SwitchAccount(string id)
