@@ -1,13 +1,18 @@
 using System;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Interop;
 using Microsoft.Web.WebView2.Core;
 
 namespace KManager
 {
     public partial class MainWindow : Window
     {
+        [DllImport("user32.dll")]
+        private static extern bool SetForegroundWindow(IntPtr hWnd);
+
         public MainWindow()
         {
             InitializeComponent();
@@ -20,7 +25,10 @@ namespace KManager
         private void CreateAndSetIcon()
         {
             try {
-                var appPath = System.Diagnostics.Process.GetCurrentProcess().MainModule.FileName;
+                var appPath = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName;
+                if (string.IsNullOrEmpty(appPath))
+                    return;
+
                 var icon = System.Drawing.Icon.ExtractAssociatedIcon(appPath);
                 if (icon != null) {
                     TrayIcon.Icon = icon;
@@ -62,16 +70,32 @@ namespace KManager
 
         private bool _isExiting = false;
 
+        internal void ShowAndActivate()
+        {
+            if (!IsVisible)
+                Show();
+
+            if (WindowState == WindowState.Minimized)
+                WindowState = WindowState.Normal;
+
+            Activate();
+
+            Topmost = true;
+            Topmost = false;
+
+            var hwnd = new WindowInteropHelper(this).Handle;
+            if (hwnd != IntPtr.Zero)
+                SetForegroundWindow(hwnd);
+        }
+
         private void TrayIcon_TrayMouseDoubleClick(object sender, RoutedEventArgs e)
         {
-            this.Show();
-            this.Activate();
+            ShowAndActivate();
         }
 
         private void MenuShow_Click(object sender, RoutedEventArgs e)
         {
-            this.Show();
-            this.Activate();
+            ShowAndActivate();
         }
 
         private void MenuExit_Click(object sender, RoutedEventArgs e)
