@@ -28,20 +28,22 @@ namespace KManager.Core
     {
         public const string DefaultGroupId = "default";
         private const string DefaultGroupName = "默认分组";
+        private const string AppName = "KManager";
 
         private readonly string _appDataPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Battle.net");
-        private readonly string _dataDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data");
+        private readonly string _dataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), AppName, "Data");
+        private readonly string _legacyDataDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data");
         private readonly string _accountsJsonPath;
         private readonly string _groupsJsonPath;
         private readonly string _configFilePath;
         private const string RegistryKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
-        private const string AppName = "KManager";
 
         public BattleNetCore()
         {
             _configFilePath = Path.Combine(_appDataPath, "Battle.net.config");
             _accountsJsonPath = Path.Combine(_dataDir, "accounts.json");
             _groupsJsonPath = Path.Combine(_dataDir, "groups.json");
+            MigrateLegacyDataIfNeeded();
             if (!Directory.Exists(_dataDir))
                 Directory.CreateDirectory(_dataDir);
         }
@@ -398,6 +400,47 @@ namespace KManager.Core
         private static string NormalizeGroupName(string name)
         {
             return (name ?? "").Trim();
+        }
+
+        private void MigrateLegacyDataIfNeeded()
+        {
+            try
+            {
+                if (!Directory.Exists(_legacyDataDir))
+                    return;
+
+                if (Path.GetFullPath(_legacyDataDir).TrimEnd(Path.DirectorySeparatorChar).Equals(
+                    Path.GetFullPath(_dataDir).TrimEnd(Path.DirectorySeparatorChar),
+                    StringComparison.OrdinalIgnoreCase))
+                    return;
+
+                if (File.Exists(_accountsJsonPath))
+                    return;
+
+                Directory.CreateDirectory(_dataDir);
+                CopyDirectory(_legacyDataDir, _dataDir);
+            }
+            catch
+            {
+            }
+        }
+
+        private static void CopyDirectory(string sourceDir, string destinationDir)
+        {
+            Directory.CreateDirectory(destinationDir);
+
+            foreach (var file in Directory.GetFiles(sourceDir))
+            {
+                var destinationPath = Path.Combine(destinationDir, Path.GetFileName(file));
+                if (!File.Exists(destinationPath))
+                    File.Copy(file, destinationPath);
+            }
+
+            foreach (var directory in Directory.GetDirectories(sourceDir))
+            {
+                var destinationPath = Path.Combine(destinationDir, Path.GetFileName(directory));
+                CopyDirectory(directory, destinationPath);
+            }
         }
     }
 }

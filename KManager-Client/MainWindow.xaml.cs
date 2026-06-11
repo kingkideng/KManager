@@ -39,8 +39,13 @@ namespace KManager
 
         private async void InitializeWebView()
         {
-            // Set custom cache folder so it doesn't try to write to read-only install dirs later
-            var env = await CoreWebView2Environment.CreateAsync(null, Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "WebView2Cache"));
+            var cacheDir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "KManager",
+                "WebView2Cache");
+            Directory.CreateDirectory(cacheDir);
+
+            var env = await CoreWebView2Environment.CreateAsync(null, cacheDir);
             await webView.EnsureCoreWebView2Async(env);
             webView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
             
