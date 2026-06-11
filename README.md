@@ -135,6 +135,18 @@ dotnet publish -c Release -r win-x64 --self-contained true
 KManager-Client/bin/Release/net8.0-windows/win-x64/publish
 ```
 
+构建 `setup.exe` 安装包需要安装 Inno Setup，然后在仓库根目录运行：
+
+```bash
+iscc installer/KManager.iss
+```
+
+安装包输出到：
+
+```text
+../ReleaseAssets/KManager_Setup_v1.1.0.exe
+```
+
 ## 许可协议
 
 本项目基于 [MIT License](LICENSE) 开源。
