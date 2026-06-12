@@ -406,23 +406,167 @@ namespace KManager.Core
         {
             try
             {
-                if (!Directory.Exists(_legacyDataDir))
-                    return;
-
-                if (Path.GetFullPath(_legacyDataDir).TrimEnd(Path.DirectorySeparatorChar).Equals(
-                    Path.GetFullPath(_dataDir).TrimEnd(Path.DirectorySeparatorChar),
-                    StringComparison.OrdinalIgnoreCase))
-                    return;
-
-                if (File.Exists(_accountsJsonPath))
-                    return;
-
                 Directory.CreateDirectory(_dataDir);
-                CopyDirectory(_legacyDataDir, _dataDir);
+
+                foreach (var legacyDataDir in GetLegacyDataDirectories())
+                    MergeLegacyData(legacyDataDir);
             }
             catch
             {
             }
+        }
+
+        private IEnumerable<string> GetLegacyDataDirectories()
+        {
+            var candidates = new List<string>
+            {
+                _legacyDataDir,
+                Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "Programs",
+                    AppName,
+                    "Data")
+            };
+
+            var baseDir = AppDomain.CurrentDomain.BaseDirectory.TrimEnd(
+                Path.DirectorySeparatorChar,
+                Path.AltDirectorySeparatorChar);
+            var parentDir = Directory.GetParent(baseDir);
+            if (parentDir != null)
+                candidates.Add(Path.Combine(parentDir.FullName, "Data"));
+
+            try
+            {
+                using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
+                    @"Software\Microsoft\Windows\CurrentVersion\Uninstall\KManager_is1");
+                var installLocation = key?.GetValue("InstallLocation")?.ToString();
+                if (!string.IsNullOrWhiteSpace(installLocation))
+                    candidates.Add(Path.Combine(installLocation, "Data"));
+            }
+            catch
+            {
+            }
+
+            var currentDataDir = NormalizePath(_dataDir);
+            return candidates
+                .Where(Directory.Exists)
+                .Select(NormalizePath)
+                .Where(path => !string.Equals(path, currentDataDir, StringComparison.OrdinalIgnoreCase))
+                .Distinct(StringComparer.OrdinalIgnoreCase);
+        }
+
+        private void MergeLegacyData(string legacyDataDir)
+        {
+            var accounts = ReadAccountsFromFile(_accountsJsonPath);
+            var accountIds = accounts.Select(a => a.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var groups = ReadGroups();
+            var groupIds = groups.Select(g => g.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var groupsChanged = false;
+            var accountsChanged = false;
+
+            foreach (var legacyGroup in ReadGroupsFromFile(Path.Combine(legacyDataDir, "groups.json")))
+            {
+                if (string.IsNullOrWhiteSpace(legacyGroup.Id) || groupIds.Contains(legacyGroup.Id))
+                    continue;
+
+                groups.Add(legacyGroup);
+                groupIds.Add(legacyGroup.Id);
+                groupsChanged = true;
+            }
+
+            if (groupsChanged)
+                SaveGroups(groups);
+
+            foreach (var legacyAccount in ReadAccountsFromFile(Path.Combine(legacyDataDir, "accounts.json")))
+            {
+                if (string.IsNullOrWhiteSpace(legacyAccount.Id))
+                    continue;
+
+                if (string.IsNullOrWhiteSpace(legacyAccount.GroupId) || !groupIds.Contains(legacyAccount.GroupId))
+                    legacyAccount.GroupId = DefaultGroupId;
+
+                if (!accountIds.Contains(legacyAccount.Id))
+                {
+                    accounts.Add(legacyAccount);
+                    accountIds.Add(legacyAccount.Id);
+                    accountsChanged = true;
+                }
+
+                CopyAccountDirectory(legacyDataDir, legacyAccount.Id);
+            }
+
+            var recoveredIndex = 1;
+            foreach (var accountDir in Directory.GetDirectories(legacyDataDir))
+            {
+                var accountId = Path.GetFileName(accountDir);
+                if (string.IsNullOrWhiteSpace(accountId) || accountIds.Contains(accountId))
+                    continue;
+
+                if (!File.Exists(Path.Combine(accountDir, "Battle.net.config")))
+                    continue;
+
+                accounts.Add(new AccountInfo
+                {
+                    Id = accountId,
+                    Remark = $"恢复账号 {recoveredIndex++}",
+                    Username = "",
+                    LastUsed = Directory.GetLastWriteTime(accountDir),
+                    GroupId = DefaultGroupId
+                });
+                accountIds.Add(accountId);
+                accountsChanged = true;
+
+                CopyAccountDirectory(legacyDataDir, accountId);
+            }
+
+            if (accountsChanged)
+                SaveAccounts(accounts);
+        }
+
+        private void CopyAccountDirectory(string legacyDataDir, string accountId)
+        {
+            var sourceDir = Path.Combine(legacyDataDir, accountId);
+            if (!Directory.Exists(sourceDir))
+                return;
+
+            CopyDirectory(sourceDir, Path.Combine(_dataDir, accountId));
+        }
+
+        private static List<AccountInfo> ReadAccountsFromFile(string path)
+        {
+            try
+            {
+                if (!File.Exists(path))
+                    return new List<AccountInfo>();
+
+                return JsonSerializer.Deserialize<List<AccountInfo>>(File.ReadAllText(path)) ?? new List<AccountInfo>();
+            }
+            catch
+            {
+                return new List<AccountInfo>();
+            }
+        }
+
+        private static List<GroupInfo> ReadGroupsFromFile(string path)
+        {
+            try
+            {
+                if (!File.Exists(path))
+                    return new List<GroupInfo>();
+
+                var groups = JsonSerializer.Deserialize<List<GroupInfo>>(File.ReadAllText(path)) ?? new List<GroupInfo>();
+                NormalizeGroups(groups);
+                return groups;
+            }
+            catch
+            {
+                return new List<GroupInfo>();
+            }
+        }
+
+        private static string NormalizePath(string path)
+        {
+            return Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
         }
 
         private static void CopyDirectory(string sourceDir, string destinationDir)
