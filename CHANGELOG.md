@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.1.1 - 2026-06-13
+
+- Added the visible `@Jayden` watermark in the app, linked to the GitHub repository.
+- Rebuilt the release package so the installer and portable zip include all v1.1 updates.
+- Updated version metadata, installer metadata and documentation for the v1.1.1 release.
+
 ## v1.1.0 - 2026-06-11
 
 - Added account groups with create, rename, delete, collapse and move support.

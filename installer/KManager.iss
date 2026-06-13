@@ -1,5 +1,5 @@
 #define MyAppName "KManager"
-#define MyAppVersion "1.1.0"
+#define MyAppVersion "1.1.1"
 #define MyAppPublisher "kingkideng"
 #define MyAppURL "https://github.com/kingkideng/KManager"
 #define MyAppExeName "KManager.exe"
@@ -31,7 +31,7 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 CloseApplications=yes
 RestartApplications=no
-VersionInfoVersion=1.1.0.0
+VersionInfoVersion=1.1.1.0
 VersionInfoCompany={#MyAppPublisher}
 VersionInfoDescription={#MyAppName} Setup
 VersionInfoProductName={#MyAppName}
@@ -91,7 +91,7 @@ begin
           if (FindRec.Attributes and FILE_ATTRIBUTE_DIRECTORY) <> 0 then
             CopyDirectoryIfMissing(SourcePath, DestPath)
           else if not FileExists(DestPath) then
-            FileCopy(SourcePath, DestPath, False);
+            CopyFile(SourcePath, DestPath, False);
         end;
       until not FindNext(FindRec);
     finally

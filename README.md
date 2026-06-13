@@ -6,7 +6,13 @@
 
 KManager 是一款面向 Battle.net 多账号用户的 Windows 桌面工具。它通过保存和切换战网客户端本地会话配置，实现账号快速切换，不记录账号密码，不做内存注入。
 
-> 当前版本：v1.1.0
+> 当前版本：v1.1.1
+
+## v1.1.1 更新重点
+
+- 新增 `@Jayden` 水印：在软件右下角显示，点击可打开 GitHub 项目主页。
+- 完整重发安装包和绿色压缩包：下载页中的 `setup.exe` 和 zip 均包含最新功能。
+- 保留 v1.1 全部核心更新：账号分组、卡片编辑、单实例启动和旧数据自动迁移。
 
 ## v1.1.0 更新重点
 
@@ -31,12 +37,14 @@ KManager 是一款面向 Battle.net 多账号用户的 Windows 桌面工具。�
 
 推荐普通用户使用 `setup.exe` 安装包，安装时可以选择安装位置；如果下载的是绿色压缩包，也可以解压后直接运行 `KManager.exe`。
 
+当前版本暂不支持国服和外服之间互相切换，后续版本会继续完善。
+
 ## 从 v1.0 升级
 
 如果你是通过 `setup.exe` 安装的 v1.0：
 
 1. 关闭 KManager 和战网客户端。
-2. 直接运行 v1.1 的 `setup.exe` 覆盖安装。
+2. 直接运行 v1.1.1 的 `setup.exe` 覆盖安装。
 3. 启动 KManager，旧账号会自动迁移到“默认分组”。
 
 v1.1 会把旧安装目录里的：
@@ -144,7 +152,7 @@ iscc installer/KManager.iss
 安装包输出到：
 
 ```text
-../ReleaseAssets/KManager_Setup_v1.1.0.exe
+../ReleaseAssets/KManager_Setup_v1.1.1.exe
 ```
 
 ## 许可协议
