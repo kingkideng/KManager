@@ -110,6 +110,11 @@ class MockBridge {
     console.log('Mock: Auto start set to', enabled);
   }
 
+  async OpenExternalUrl(url: string): Promise<boolean> {
+    window.open(url, '_blank', 'noopener,noreferrer');
+    return true;
+  }
+
   async CloseApp(): Promise<void> {
     console.log('Mock: Closing application...');
   }

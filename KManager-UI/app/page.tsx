@@ -7,11 +7,12 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   Play, Copy, Trash2, X, Sparkles, PlusCircle, Plus,
   Loader2, Check, AlertCircle, Moon, Sun, ChevronDown,
-  ChevronRight, FolderPlus, MoreHorizontal, Pencil
+  ChevronRight, FolderPlus, MoreHorizontal, Pencil, Github
 } from 'lucide-react';
 
 const DEFAULT_GROUP_ID = 'default';
 const EXPANDED_GROUPS_KEY = 'kmanager_expanded_groups';
+const REPOSITORY_URL = 'https://github.com/kingkideng/KManager';
 
 const KLogoBrand = ({ isActive, isDarkMode }: { isActive: boolean; isDarkMode: boolean }) => (
   <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" className={`w-[115%] h-[115%] transition-all duration-500 origin-center ${!isActive ? 'opacity-40 grayscale saturate-0 scale-90' : 'scale-100'}`}>
@@ -473,6 +474,18 @@ export default function App() {
     await bridge.CloseApp();
   };
 
+  const openRepository = async () => {
+    const bridge = getBridge();
+    try {
+      if (bridge.OpenExternalUrl) {
+        const opened = await bridge.OpenExternalUrl(REPOSITORY_URL);
+        if (opened) return;
+      }
+    } catch {}
+
+    window.open(REPOSITORY_URL, '_blank', 'noopener,noreferrer');
+  };
+
   const loginNewAccount = async () => {
     const bridge = getBridge();
     await bridge.AddNewAccount();
@@ -868,6 +881,20 @@ export default function App() {
           </div>
         )}
       </main>
+
+      <button
+        onClick={openRepository}
+        className={`fixed bottom-4 right-5 z-30 no-drag flex items-center gap-2 rounded-full border px-3 py-2 text-[12px] font-semibold tracking-tight backdrop-blur-xl transition-all active:scale-95 ${
+          isDarkMode
+            ? 'bg-white/[0.06] text-white/60 border-white/10 hover:bg-white/10 hover:text-white shadow-lg shadow-black/20'
+            : 'bg-white/80 text-black/55 border-black/10 hover:bg-white hover:text-black shadow-lg shadow-black/5'
+        }`}
+        title="Open KManager on GitHub"
+        aria-label="Open KManager GitHub repository"
+      >
+        <Github className="w-3.5 h-3.5" />
+        <span>@Jayden</span>
+      </button>
 
       <div className={`fixed inset-0 pointer-events-none ring-[40px] inset-shadow-xl z-0 transition-colors duration-500 ${isDarkMode ? 'ring-black/20' : 'ring-white/40'}`}></div>
 

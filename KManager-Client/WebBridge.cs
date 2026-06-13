@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 
@@ -79,6 +80,31 @@ namespace KManager
         public bool GetAutoStart() => _core.GetAutoStartStatus();
         
         public void SetAutoStart(bool enabled) => _core.SetAutoStart(enabled);
+
+        public bool OpenExternalUrl(string url)
+        {
+            try
+            {
+                if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
+                    return false;
+
+                if (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp)
+                    return false;
+
+                if (!string.Equals(uri.Host, "github.com", StringComparison.OrdinalIgnoreCase))
+                    return false;
+
+                Process.Start(new ProcessStartInfo(uri.AbsoluteUri)
+                {
+                    UseShellExecute = true
+                });
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
 
         public void DragWindow()
         {
