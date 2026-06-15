@@ -1,6 +1,8 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
@@ -10,6 +12,10 @@ namespace KManager
 {
     public partial class MainWindow : Window
     {
+        private const string WebView2BootstrapperPath = @"Resources\MicrosoftEdgeWebview2Setup.exe";
+        private static readonly TimeSpan WebView2InstallTimeout = TimeSpan.FromSeconds(120);
+        private bool _webViewInitialized;
+
         [DllImport("user32.dll")]
         private static extern bool SetForegroundWindow(IntPtr hWnd);
 
@@ -17,7 +23,7 @@ namespace KManager
         {
             InitializeComponent();
             ApplyResponsiveWindowSize();
-            InitializeWebView();
+            Loaded += async (_, _) => await InitializeWebViewAsync();
             try {
                 CreateAndSetIcon();
             } catch { }
@@ -54,53 +60,172 @@ namespace KManager
             } catch { }
         }
 
-        private async void InitializeWebView()
+        private async Task InitializeWebViewAsync()
         {
+            if (_webViewInitialized)
+                return;
+
+            _webViewInitialized = true;
+
             try
             {
-                var cacheDir = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                    "KManager",
-                    "WebView2Cache");
-                Directory.CreateDirectory(cacheDir);
-
-                var wwwrootDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "wwwroot");
-                var indexPath = Path.Combine(wwwrootDir, "index.html");
-                if (!File.Exists(indexPath))
-                    throw new FileNotFoundException("KManager front-end files are missing.", indexPath);
-
-                // Some machines render an empty WebView2 surface with GPU acceleration enabled.
-                var options = new CoreWebView2EnvironmentOptions("--disable-gpu");
-                var env = await CoreWebView2Environment.CreateAsync(null, cacheDir, options);
-                await webView.EnsureCoreWebView2Async(env);
-                webView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
-
-                webView.CoreWebView2.ProcessFailed += (_, args) =>
+                if (!await EnsureWebView2RuntimeAsync())
                 {
-                    ShowStartupError($"WebView2 进程异常退出：{args.ProcessFailedKind}");
-                };
+                    Application.Current.Shutdown();
+                    return;
+                }
 
-                webView.NavigationCompleted += (_, args) =>
-                {
-                    if (!args.IsSuccess)
-                        ShowStartupError($"KManager 界面加载失败：{args.WebErrorStatus}");
-                };
-
-                // Map wwwroot to a virtual host for cleaner URLs and CORS
-                webView.CoreWebView2.SetVirtualHostNameToFolderMapping(
-                    "app.local",
-                    wwwrootDir,
-                    CoreWebView2HostResourceAccessKind.Allow);
-
-                webView.CoreWebView2.AddHostObjectToScript("bridge", new WebBridge());
-
-                webView.Source = new Uri("http://app.local/index.html");
+                await StartWebViewAsync();
             }
             catch (Exception ex)
             {
+                if (await OfferWebView2RepairAsync(ex))
+                    return;
+
                 ShowStartupError(
                     "KManager 无法启动 WebView2。请安装或修复 Microsoft Edge WebView2 Runtime，然后重启 KManager。",
                     ex);
+            }
+        }
+
+        private async Task StartWebViewAsync()
+        {
+            var cacheDir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "KManager",
+                "WebView2Cache");
+            Directory.CreateDirectory(cacheDir);
+
+            var wwwrootDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "wwwroot");
+            var indexPath = Path.Combine(wwwrootDir, "index.html");
+            if (!File.Exists(indexPath))
+                throw new FileNotFoundException("KManager front-end files are missing.", indexPath);
+
+            // Some machines render an empty WebView2 surface with GPU acceleration enabled.
+            var options = new CoreWebView2EnvironmentOptions("--disable-gpu");
+            var env = await CoreWebView2Environment.CreateAsync(null, cacheDir, options);
+            await webView.EnsureCoreWebView2Async(env);
+            webView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
+
+            webView.CoreWebView2.ProcessFailed += (_, args) =>
+            {
+                ShowStartupError($"WebView2 进程异常退出：{args.ProcessFailedKind}");
+            };
+
+            webView.NavigationCompleted += (_, args) =>
+            {
+                if (!args.IsSuccess)
+                    ShowStartupError($"KManager 界面加载失败：{args.WebErrorStatus}");
+            };
+
+            // Map wwwroot to a virtual host for cleaner URLs and CORS
+            webView.CoreWebView2.SetVirtualHostNameToFolderMapping(
+                "app.local",
+                wwwrootDir,
+                CoreWebView2HostResourceAccessKind.Allow);
+
+            webView.CoreWebView2.AddHostObjectToScript("bridge", new WebBridge());
+
+            webView.Source = new Uri("http://app.local/index.html");
+        }
+
+        private async Task<bool> EnsureWebView2RuntimeAsync()
+        {
+            if (IsWebView2RuntimeAvailable())
+                return true;
+
+            var result = MessageBox.Show(
+                this,
+                "KManager 需要 Microsoft Edge WebView2 Runtime 才能显示界面。\n\n点击“确定”后将使用随程序附带的 Bootstrapper 联网下载并安装运行环境。安装完成后 KManager 会继续启动。",
+                "KManager 缺少运行环境",
+                MessageBoxButton.OKCancel,
+                MessageBoxImage.Information);
+
+            if (result != MessageBoxResult.OK)
+                return false;
+
+            return await InstallWebView2RuntimeAsync();
+        }
+
+        private async Task<bool> OfferWebView2RepairAsync(Exception startupException)
+        {
+            var result = MessageBox.Show(
+                this,
+                $"WebView2 运行环境启动失败，可能缺失或损坏。\n\n点击“确定”后将联网下载并尝试安装/修复 Microsoft Edge WebView2 Runtime。\n\n{startupException.Message}",
+                "KManager 启动失败",
+                MessageBoxButton.OKCancel,
+                MessageBoxImage.Warning);
+
+            if (result != MessageBoxResult.OK)
+                return false;
+
+            if (!await InstallWebView2RuntimeAsync())
+                return false;
+
+            try
+            {
+                await StartWebViewAsync();
+                return true;
+            }
+            catch (Exception retryException)
+            {
+                ShowStartupError(
+                    "WebView2 Runtime 已尝试安装/修复，但 KManager 仍然无法启动界面。请重启电脑后再试，或在系统应用列表中修复 Microsoft Edge WebView2 Runtime。",
+                    retryException);
+                return true;
+            }
+        }
+
+        private async Task<bool> InstallWebView2RuntimeAsync()
+        {
+            var bootstrapperPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, WebView2BootstrapperPath);
+            if (!File.Exists(bootstrapperPath))
+            {
+                ShowStartupError("KManager 安装包缺少 WebView2 Runtime Bootstrapper，请重新下载安装包。");
+                return false;
+            }
+
+            try
+            {
+                var startInfo = new ProcessStartInfo
+                {
+                    FileName = bootstrapperPath,
+                    Arguments = "/silent /install",
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
+
+                using var process = Process.Start(startInfo);
+
+                var deadline = DateTime.UtcNow + WebView2InstallTimeout;
+                while (DateTime.UtcNow < deadline)
+                {
+                    if (IsWebView2RuntimeAvailable())
+                        return true;
+
+                    await Task.Delay(2000);
+                }
+
+                ShowStartupError("WebView2 Runtime 安装程序已启动，但暂时没有检测到安装完成。请确认网络可用，等待安装完成后重新打开 KManager。");
+                return false;
+            }
+            catch (Exception ex)
+            {
+                ShowStartupError("WebView2 Runtime 联网安装失败。请确认网络可用，或手动安装 Microsoft Edge WebView2 Runtime 后再启动 KManager。", ex);
+                return false;
+            }
+        }
+
+        private static bool IsWebView2RuntimeAvailable()
+        {
+            try
+            {
+                var version = CoreWebView2Environment.GetAvailableBrowserVersionString();
+                return !string.IsNullOrWhiteSpace(version) && !version.StartsWith("0.0.0.0", StringComparison.Ordinal);
+            }
+            catch
+            {
+                return false;
             }
         }
 

@@ -23,13 +23,13 @@
 
 KManager 通过保存并切换 Battle.net 客户端的本地登录配置，让多个战网账号之间的切换更顺手。已经保存过的账号，后续通常可以直接切换进入登录状态，减少反复输入账号、等待验证码、重新登录的打断。
 
-> 当前版本：v1.1.2
+> 当前版本：v1.1.3
 
-## v1.1.2 更新重点
+## v1.1.3 更新重点
 
-- 改善少数电脑上 WebView2 启动后窗口空白的问题：禁用 WebView2 GPU 加速并改用非透明宿主背景。
-- 启动失败时会显示中文错误提示，便于判断是否需要修复 Microsoft Edge WebView2 Runtime。
-- 根据屏幕可用区域自动确定窗口尺寸，并禁止手动拉伸，避免窗口边框白条和布局被随意缩放。
+- 启动时自动检测 Microsoft Edge WebView2 Runtime，环境正常时不显示任何额外提示。
+- 缺少 WebView2 Runtime 时提示用户确认，并使用内置 Bootstrapper 联网下载和安装运行环境。
+- WebView2 启动失败时可尝试联网安装/修复 Runtime，减少少数电脑打开后无法显示界面的情况。
 
 ## 适合谁
 
@@ -49,13 +49,13 @@ KManager 通过保存并切换 Battle.net 客户端的本地登录配置，让�
 推荐普通用户下载并运行：
 
 ```text
-KManager_Setup_v1.1.2.exe
+KManager_Setup_v1.1.3.exe
 ```
 
 如果你更喜欢绿色版，也可以下载：
 
 ```text
-KManager-v1.1.2-win-x64.zip
+KManager-v1.1.3-win-x64.zip
 ```
 
 解压后运行其中的 `KManager.exe`。
@@ -110,7 +110,7 @@ KManager 会自动关闭 Battle.net 和 Agent 进程，替换为目标账号的�
 如果你之前是通过 `setup.exe` 安装的 v1.0：
 
 1. 关闭 KManager 和 Battle.net 客户端。
-2. 直接运行新版 `KManager_Setup_v1.1.2.exe` 覆盖安装。
+2. 直接运行新版 `KManager_Setup_v1.1.3.exe` 覆盖安装。
 3. 启动 KManager，旧账号会自动迁移到“默认分组”。
 
 v1.1 起，KManager 会把旧安装目录里的：
@@ -150,6 +150,12 @@ WebView2 缓存保存在：
 ```
 
 ## 最新更新
+
+### v1.1.3
+
+- 启动时自动检测 WebView2 Runtime，正常环境不显示额外提示。
+- 缺少 WebView2 Runtime 时，用户确认后使用内置 Bootstrapper 联网下载安装。
+- WebView2 启动失败时可尝试联网安装/修复 Runtime。
 
 ### v1.1.2
 
@@ -212,7 +218,7 @@ iscc installer/KManager.iss
 安装包输出到：
 
 ```text
-../ReleaseAssets/KManager_Setup_v1.1.2.exe
+../ReleaseAssets/KManager_Setup_v1.1.3.exe
 ```
 
 ## 许可协议

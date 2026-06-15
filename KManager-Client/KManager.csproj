@@ -7,10 +7,10 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <ApplicationIcon>app.ico</ApplicationIcon>
-    <Version>1.1.2</Version>
-    <FileVersion>1.1.2.0</FileVersion>
-    <AssemblyVersion>1.1.2.0</AssemblyVersion>
-    <InformationalVersion>1.1.2</InformationalVersion>
+    <Version>1.1.3</Version>
+    <FileVersion>1.1.3.0</FileVersion>
+    <AssemblyVersion>1.1.3.0</AssemblyVersion>
+    <InformationalVersion>1.1.3</InformationalVersion>
   </PropertyGroup>
 
   <ItemGroup>
@@ -21,6 +21,9 @@
 
   <ItemGroup>
     <Content Include="wwwroot\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Resources\MicrosoftEdgeWebview2Setup.exe">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>

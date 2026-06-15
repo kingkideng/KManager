@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.1.3 - 2026-06-16
+
+- Added startup detection for the Microsoft Edge WebView2 Runtime.
+- Bundled the Microsoft Edge WebView2 Evergreen Bootstrapper with the app package.
+- When the runtime is missing, KManager asks for user confirmation and then runs the Bootstrapper to download and install it.
+- Normal machines with a working runtime start without any extra prompt.
+- Updated version metadata, installer metadata and documentation for the v1.1.3 release.
+
 ## v1.1.2 - 2026-06-15
 
 - Improved WebView2 compatibility on machines that rendered an empty app window.
