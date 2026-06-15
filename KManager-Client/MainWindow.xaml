@@ -7,8 +7,8 @@
         xmlns:tb="http://www.hardcodet.net/taskbar"
         mc:Ignorable="d"
         Title="KManager" Height="750" Width="900"
-        WindowStyle="None" AllowsTransparency="True" Background="Transparent"
-        ResizeMode="CanResizeWithGrip" WindowStartupLocation="CenterScreen">
+        WindowStyle="None" Background="#1E1E1E"
+        ResizeMode="NoResize" WindowStartupLocation="CenterScreen">
     <Border CornerRadius="12" Background="#1E1E1E" x:Name="MainBorder" ClipToBounds="True">
         <Grid>
             <tb:TaskbarIcon x:Name="TrayIcon"
@@ -23,7 +23,7 @@
                 </tb:TaskbarIcon.ContextMenu>
             </tb:TaskbarIcon>
             <!-- WebView2 Content -->
-            <wv2:WebView2 Name="webView" Margin="0,0,0,0" DefaultBackgroundColor="Transparent" />
+            <wv2:WebView2 Name="webView" Margin="0,0,0,0" DefaultBackgroundColor="#050505" />
         </Grid>
     </Border>
 </Window>

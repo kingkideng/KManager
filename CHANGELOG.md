@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.1.2 - 2026-06-15
+
+- Improved WebView2 compatibility on machines that rendered an empty app window.
+- Disabled WebView2 GPU acceleration and removed the transparent WPF host surface.
+- Added visible startup error dialogs for WebView2 initialization, process and navigation failures.
+- Fixed the main window size based on the current screen work area and disabled manual resizing.
+- Updated version metadata, installer metadata and documentation for the v1.1.2 release.
+
 ## v1.1.1 - 2026-06-13
 
 - Added the visible `@Jayden` watermark in the app, linked to the GitHub repository.

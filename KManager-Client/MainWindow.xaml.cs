@@ -16,10 +16,27 @@ namespace KManager
         public MainWindow()
         {
             InitializeComponent();
+            ApplyResponsiveWindowSize();
             InitializeWebView();
             try {
                 CreateAndSetIcon();
             } catch { }
+        }
+
+        private void ApplyResponsiveWindowSize()
+        {
+            var workArea = SystemParameters.WorkArea;
+            var width = Math.Clamp(Math.Floor(workArea.Width * 0.82), 900, 1180);
+            var height = Math.Clamp(Math.Floor(workArea.Height * 0.86), 680, 780);
+
+            if (workArea.Width < 1100 || workArea.Height < 800)
+            {
+                width = Math.Min(900, Math.Floor(workArea.Width * 0.94));
+                height = Math.Min(720, Math.Floor(workArea.Height * 0.90));
+            }
+
+            Width = width;
+            Height = height;
         }
 
         private void CreateAndSetIcon()
@@ -39,25 +56,58 @@ namespace KManager
 
         private async void InitializeWebView()
         {
-            var cacheDir = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "KManager",
-                "WebView2Cache");
-            Directory.CreateDirectory(cacheDir);
+            try
+            {
+                var cacheDir = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "KManager",
+                    "WebView2Cache");
+                Directory.CreateDirectory(cacheDir);
 
-            var env = await CoreWebView2Environment.CreateAsync(null, cacheDir);
-            await webView.EnsureCoreWebView2Async(env);
-            webView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
-            
-            // Map wwwroot to a virtual host for cleaner URLs and CORS
-            webView.CoreWebView2.SetVirtualHostNameToFolderMapping(
-                "app.local",
-                Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "wwwroot"),
-                CoreWebView2HostResourceAccessKind.Allow);
+                var wwwrootDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "wwwroot");
+                var indexPath = Path.Combine(wwwrootDir, "index.html");
+                if (!File.Exists(indexPath))
+                    throw new FileNotFoundException("KManager front-end files are missing.", indexPath);
 
-            webView.CoreWebView2.AddHostObjectToScript("bridge", new WebBridge());
+                // Some machines render an empty WebView2 surface with GPU acceleration enabled.
+                var options = new CoreWebView2EnvironmentOptions("--disable-gpu");
+                var env = await CoreWebView2Environment.CreateAsync(null, cacheDir, options);
+                await webView.EnsureCoreWebView2Async(env);
+                webView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
 
-            webView.Source = new Uri("http://app.local/index.html");
+                webView.CoreWebView2.ProcessFailed += (_, args) =>
+                {
+                    ShowStartupError($"WebView2 进程异常退出：{args.ProcessFailedKind}");
+                };
+
+                webView.NavigationCompleted += (_, args) =>
+                {
+                    if (!args.IsSuccess)
+                        ShowStartupError($"KManager 界面加载失败：{args.WebErrorStatus}");
+                };
+
+                // Map wwwroot to a virtual host for cleaner URLs and CORS
+                webView.CoreWebView2.SetVirtualHostNameToFolderMapping(
+                    "app.local",
+                    wwwrootDir,
+                    CoreWebView2HostResourceAccessKind.Allow);
+
+                webView.CoreWebView2.AddHostObjectToScript("bridge", new WebBridge());
+
+                webView.Source = new Uri("http://app.local/index.html");
+            }
+            catch (Exception ex)
+            {
+                ShowStartupError(
+                    "KManager 无法启动 WebView2。请安装或修复 Microsoft Edge WebView2 Runtime，然后重启 KManager。",
+                    ex);
+            }
+        }
+
+        private void ShowStartupError(string message, Exception? exception = null)
+        {
+            var detail = exception == null ? "" : $"{Environment.NewLine}{Environment.NewLine}{exception.Message}";
+            MessageBox.Show(this, message + detail, "KManager 启动失败", MessageBoxButton.OK, MessageBoxImage.Error);
         }
 
         private void Window_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
