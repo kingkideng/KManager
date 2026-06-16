@@ -19,6 +19,9 @@ namespace KManager
         [DllImport("user32.dll")]
         private static extern bool SetForegroundWindow(IntPtr hWnd);
 
+        [DllImport("kernel32.dll")]
+        private static extern bool SetProcessWorkingSetSize(IntPtr hProcess, int dwMinimumWorkingSetSize, int dwMaximumWorkingSetSize);
+
         public MainWindow()
         {
             InitializeComponent();
@@ -102,7 +105,7 @@ namespace KManager
                 throw new FileNotFoundException("KManager front-end files are missing.", indexPath);
 
             // Some machines render an empty WebView2 surface with GPU acceleration enabled.
-            var options = new CoreWebView2EnvironmentOptions("--disable-gpu");
+            var options = new CoreWebView2EnvironmentOptions("--disable-gpu --renderer-process-limit=1 --disable-features=Translate --js-flags=\"--max-old-space-size=128\"");
             var env = await CoreWebView2Environment.CreateAsync(null, cacheDir, options);
             await webView.EnsureCoreWebView2Async(env);
             webView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
@@ -284,12 +287,24 @@ namespace KManager
             Application.Current.Shutdown();
         }
 
+        private void TrimMemory()
+        {
+            try
+            {
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+                SetProcessWorkingSetSize(Process.GetCurrentProcess().Handle, -1, -1);
+            }
+            catch { }
+        }
+
         protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
         {
             if (!_isExiting)
             {
                 e.Cancel = true;
                 this.Hide();
+                TrimMemory();
             }
             base.OnClosing(e);
         }
@@ -298,7 +313,7 @@ namespace KManager
         {
             if (WindowState == WindowState.Minimized)
             {
-                this.Hide();
+                TrimMemory();
             }
             base.OnStateChanged(e);
         }

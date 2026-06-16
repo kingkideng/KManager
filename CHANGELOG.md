@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.1.4 - 2026-06-16
+
+- Optimized WebView2 background memory footprint. The app now trims its memory aggressively to ~30MB when minimized or hidden to the system tray.
+- Capped WebView2 V8 engine heap size to 128MB and disabled unnecessary background browser processes to lower active memory overhead.
+- Added a new minimize button to the window header controls (minimizes to the taskbar).
+- Enabled .NET Concurrent Workstation Garbage Collection for a leaner memory footprint.
+- Fixed the `X` close button behavior to correctly hide the app to the system tray instead of fully shutting down the process.
 ## v1.1.3 - 2026-06-16
 
 - Added startup detection for the Microsoft Edge WebView2 Runtime.

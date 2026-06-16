@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   Play, Copy, Trash2, X, Sparkles, PlusCircle, Plus,
   Loader2, Check, AlertCircle, Moon, Sun, ChevronDown,
-  ChevronRight, FolderPlus, MoreHorizontal, Pencil, Github
+  ChevronRight, FolderPlus, MoreHorizontal, Pencil, Github, Minus
 } from 'lucide-react';
 
 const DEFAULT_GROUP_ID = 'default';
@@ -469,6 +469,13 @@ export default function App() {
     }, 150);
   };
 
+  const minimizeApp = async () => {
+    try {
+      const bridge = getBridge();
+      await bridge.MinimizeApp();
+    } catch {}
+  };
+
   const closeApp = async () => {
     const bridge = getBridge();
     await bridge.CloseApp();
@@ -589,6 +596,13 @@ export default function App() {
               开机自启
             </span>
           </label>
+          <button
+            onClick={minimizeApp}
+            className={`w-7 h-7 rounded-full flex items-center justify-center transition-all active:scale-90 ${isDarkMode ? 'text-white/40 hover:text-white hover:bg-white/10' : 'text-black/40 hover:text-black hover:bg-black/5'}`}
+            title="最小化"
+          >
+            <Minus className="w-4 h-4" />
+          </button>
           <button
             onClick={closeApp}
             className={`w-7 h-7 rounded-full flex items-center justify-center transition-all active:scale-90 ${isDarkMode ? 'text-white/40 hover:text-white hover:bg-white/10 text-red-500' : 'text-black/40 hover:bg-black/5 hover:text-black text-red-600'}`}

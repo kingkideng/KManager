@@ -116,11 +116,17 @@ namespace KManager
                 } catch { }
             });
         }
+        public void MinimizeApp()
+        {
+            System.Windows.Application.Current.Dispatcher.Invoke(() => {
+                System.Windows.Application.Current.MainWindow.WindowState = System.Windows.WindowState.Minimized;
+            });
+        }
         
         public void CloseApp()
         {
             System.Windows.Application.Current.Dispatcher.Invoke(() => {
-                System.Windows.Application.Current.Shutdown();
+                System.Windows.Application.Current.MainWindow.Close();
             });
         }
     }
