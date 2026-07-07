@@ -1781,7 +1781,7 @@ namespace KManager.Core
                 Directory.CreateDirectory(_dataDir);
 
                 foreach (var legacyDataDir in GetLegacyDataDirectories())
-                    MergeLegacyData(legacyDataDir);
+                    MergeLegacyData(legacyDataDir, IsBetaUpgradeDataDirectory(legacyDataDir));
             }
             catch
             {
@@ -1853,7 +1853,37 @@ namespace KManager.Core
         }
 #endif
 
-        private void MergeLegacyData(string legacyDataDir)
+        private static bool IsBetaUpgradeDataDirectory(string legacyDataDir)
+        {
+#if KM_TEST_BUILD
+            return false;
+#else
+            try
+            {
+                var normalizedPath = NormalizePath(legacyDataDir);
+                if (normalizedPath.Contains(BetaTestAppName, StringComparison.OrdinalIgnoreCase)
+                    || normalizedPath.Contains(BetaInstallerAppName, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+
+                using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
+                    @"Software\Microsoft\Windows\CurrentVersion\Uninstall\KManagerRegionSwitchBeta_is1");
+                var installLocation = key?.GetValue("InstallLocation")?.ToString();
+                if (string.IsNullOrWhiteSpace(installLocation))
+                    return false;
+
+                var betaInstallDataDir = NormalizePath(Path.Combine(installLocation, "Data"));
+                return string.Equals(normalizedPath, betaInstallDataDir, StringComparison.OrdinalIgnoreCase);
+            }
+            catch
+            {
+                return false;
+            }
+#endif
+        }
+
+        private void MergeLegacyData(string legacyDataDir, bool preferLegacyData)
         {
             var accounts = ReadAccountsFromFile(_accountsJsonPath);
             var accountIds = accounts.Select(a => a.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -1864,12 +1894,26 @@ namespace KManager.Core
 
             foreach (var legacyGroup in ReadGroupsFromFile(Path.Combine(legacyDataDir, "groups.json")))
             {
-                if (string.IsNullOrWhiteSpace(legacyGroup.Id) || groupIds.Contains(legacyGroup.Id))
+                if (string.IsNullOrWhiteSpace(legacyGroup.Id))
                     continue;
 
-                groups.Add(legacyGroup);
-                groupIds.Add(legacyGroup.Id);
-                groupsChanged = true;
+                if (!groupIds.Contains(legacyGroup.Id))
+                {
+                    groups.Add(legacyGroup);
+                    groupIds.Add(legacyGroup.Id);
+                    groupsChanged = true;
+                }
+                else if (preferLegacyData && legacyGroup.Id != DefaultGroupId)
+                {
+                    var existingGroup = groups.FirstOrDefault(g =>
+                        string.Equals(g.Id, legacyGroup.Id, StringComparison.OrdinalIgnoreCase));
+                    if (existingGroup != null && !string.IsNullOrWhiteSpace(legacyGroup.Name))
+                    {
+                        existingGroup.Name = legacyGroup.Name;
+                        existingGroup.CreatedAt = legacyGroup.CreatedAt;
+                        groupsChanged = true;
+                    }
+                }
             }
 
             if (groupsChanged)
@@ -1894,18 +1938,29 @@ namespace KManager.Core
                     var existingAccount = accounts.FirstOrDefault(a =>
                         string.Equals(a.Id, legacyAccount.Id, StringComparison.OrdinalIgnoreCase));
                     if (existingAccount != null)
-                        accountsChanged |= FillMissingAccountMetadata(existingAccount, legacyAccount);
+                    {
+                        accountsChanged |= preferLegacyData
+                            ? ReplaceAccountMetadata(existingAccount, legacyAccount)
+                            : FillMissingAccountMetadata(existingAccount, legacyAccount);
+                    }
                 }
 
-                CopyAccountDirectory(legacyDataDir, legacyAccount.Id);
+                CopyAccountDirectory(legacyDataDir, legacyAccount.Id, preferLegacyData);
             }
 
             var recoveredIndex = 1;
             foreach (var accountDir in Directory.GetDirectories(legacyDataDir))
             {
                 var accountId = Path.GetFileName(accountDir);
-                if (string.IsNullOrWhiteSpace(accountId) || accountIds.Contains(accountId))
+                if (string.IsNullOrWhiteSpace(accountId))
                     continue;
+
+                if (accountIds.Contains(accountId))
+                {
+                    if (preferLegacyData)
+                        CopyAccountDirectory(legacyDataDir, accountId, overwriteExisting: true);
+                    continue;
+                }
 
                 if (!File.Exists(Path.Combine(accountDir, "Battle.net.config")))
                     continue;
@@ -1922,7 +1977,7 @@ namespace KManager.Core
                 accountIds.Add(accountId);
                 accountsChanged = true;
 
-                CopyAccountDirectory(legacyDataDir, accountId);
+                CopyAccountDirectory(legacyDataDir, accountId, preferLegacyData);
             }
 
             if (accountsChanged)
@@ -1961,13 +2016,60 @@ namespace KManager.Core
             return changed;
         }
 
-        private void CopyAccountDirectory(string legacyDataDir, string accountId)
+        private static bool ReplaceAccountMetadata(AccountInfo target, AccountInfo source)
+        {
+            var changed = false;
+
+            if (target.Remark != source.Remark)
+            {
+                target.Remark = source.Remark;
+                changed = true;
+            }
+
+            if (target.Username != source.Username)
+            {
+                target.Username = source.Username;
+                changed = true;
+            }
+
+            if (target.GroupId != source.GroupId)
+            {
+                target.GroupId = source.GroupId;
+                changed = true;
+            }
+
+            if (target.Region != source.Region)
+            {
+                target.Region = source.Region;
+                changed = true;
+            }
+
+            if (target.AvatarDataUrl != source.AvatarDataUrl)
+            {
+                target.AvatarDataUrl = source.AvatarDataUrl;
+                changed = true;
+            }
+
+            if (target.LastUsed != source.LastUsed)
+            {
+                target.LastUsed = source.LastUsed;
+                changed = true;
+            }
+
+            return changed;
+        }
+
+        private void CopyAccountDirectory(string legacyDataDir, string accountId, bool overwriteExisting = false)
         {
             var sourceDir = Path.Combine(legacyDataDir, accountId);
             if (!Directory.Exists(sourceDir))
                 return;
 
-            CopyDirectory(sourceDir, Path.Combine(_dataDir, accountId));
+            var destinationDir = Path.Combine(_dataDir, accountId);
+            if (overwriteExisting)
+                TryDeleteDirectory(destinationDir);
+
+            CopyDirectory(sourceDir, destinationDir, overwriteExisting);
         }
 
         private static List<AccountInfo> ReadAccountsFromFile(string path)
@@ -2007,21 +2109,21 @@ namespace KManager.Core
             return Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
         }
 
-        private static void CopyDirectory(string sourceDir, string destinationDir)
+        private static void CopyDirectory(string sourceDir, string destinationDir, bool overwriteExisting = false)
         {
             Directory.CreateDirectory(destinationDir);
 
             foreach (var file in Directory.GetFiles(sourceDir))
             {
                 var destinationPath = Path.Combine(destinationDir, Path.GetFileName(file));
-                if (!File.Exists(destinationPath))
-                    File.Copy(file, destinationPath);
+                if (overwriteExisting || !File.Exists(destinationPath))
+                    File.Copy(file, destinationPath, overwriteExisting);
             }
 
             foreach (var directory in Directory.GetDirectories(sourceDir))
             {
                 var destinationPath = Path.Combine(destinationDir, Path.GetFileName(directory));
-                CopyDirectory(directory, destinationPath);
+                CopyDirectory(directory, destinationPath, overwriteExisting);
             }
         }
     }
