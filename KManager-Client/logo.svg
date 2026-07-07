@@ -1,63 +1,18 @@
-<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" width="256" height="256">
-    <defs>
-      <linearGradient id="bgGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-        <stop offset="0%" stop-color="#1e5cb3" />
-        <stop offset="100%" stop-color="#081e47" />
-      </linearGradient>
-
-      <linearGradient id="metalK" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stop-color="#ffffff" />
-        <stop offset="25%" stop-color="#e2e8f0" />
-        <stop offset="50%" stop-color="#94a3b8" />
-        <stop offset="60%" stop-color="#f8fafc" />
-        <stop offset="85%" stop-color="#64748b" />
-        <stop offset="100%" stop-color="#1e293b" />
-      </linearGradient>
-
-      <linearGradient id="silverRim" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stop-color="#ffffff" />
-        <stop offset="100%" stop-color="#475569" />
-      </linearGradient>
-
-      <filter id="bgShadow" x="-20%" y="-20%" width="140%" height="140%">
-        <feDropShadow dx="0" dy="6" stdDeviation="6" flood-opacity="0.8" flood-color="#000"/>
-      </filter>
-
-      <filter id="kBevelDark" x="-50%" y="-50%" width="200%" height="200%">
-        <feDropShadow dx="0" dy="8" stdDeviation="6" flood-opacity="0.8" flood-color="#000" result="shadow" />
-        <feDropShadow dx="0" dy="0" stdDeviation="12" flood-opacity="0.9" flood-color="#0ea5e9" result="glow" />
-        <feMerge result="outer">
-          <feMergeNode in="shadow" />
-          <feMergeNode in="glow" />
-        </feMerge>
-
-        <feGaussianBlur in="SourceAlpha" stdDeviation="2.5" result="blur" />
-        <feSpecularLighting in="blur" surfaceScale="6" specularConstant="1.5" specularExponent="30" lighting-color="#ffffff" result="specular">
-          <fePointLight x="20" y="0" z="50" />
-        </feSpecularLighting>
-        <feComposite in="specular" in2="SourceAlpha" operator="in" result="specular" />
-
-        <feMerge>
-          <feMergeNode in="outer" />
-          <feMergeNode in="SourceGraphic" />
-          <feMergeNode in="specular" />
-        </feMerge>
-      </filter>
-    </defs>
-
-    <rect x="8" y="8" width="84" height="84" rx="22" 
-          fill="url(#bgGradient)" 
-          stroke="url(#silverRim)" stroke-width="1"
-          filter="url(#bgShadow)"
-    />
-
-    <g filter="url(#kBevelDark)">
-      <path d="M 35 30 L 35 70 M 67 30 L 45 50 L 67 70"
-            fill="none"
-            stroke="url(#metalK)" 
-            stroke-width="16" 
-            stroke-linecap="round" 
-            stroke-linejoin="round" 
-      />
-    </g>
-  </svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="KManager icon">
+  <defs>
+    <linearGradient id="bg" x1="35" y1="24" x2="224" y2="231" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#101721"/>
+      <stop offset="1" stop-color="#05070b"/>
+    </linearGradient>
+    <linearGradient id="blue" x1="61" y1="62" x2="194" y2="190" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#8af7ff"/>
+      <stop offset="0.45" stop-color="#25bcff"/>
+      <stop offset="1" stop-color="#176bff"/>
+    </linearGradient>
+  </defs>
+  <rect x="18" y="18" width="220" height="220" rx="56" fill="url(#bg)"/>
+  <path d="M68 91c19-35 64-45 95-25 27 17 31 48 12 79-17 28-54 43-85 27-19-10-29-27-28-47" fill="none" stroke="url(#blue)" stroke-width="28" stroke-linecap="round"/>
+  <path d="M188 165c-19 35-64 45-95 25-27-17-31-48-12-79 17-28 54-43 85-27 19 10 29 27 28 47" fill="none" stroke="#f8fbff" stroke-width="28" stroke-linecap="round"/>
+  <circle cx="83" cy="91" r="12" fill="#f8fbff"/>
+  <circle cx="173" cy="165" r="12" fill="#176bff"/>
+</svg>

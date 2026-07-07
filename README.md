@@ -1,7 +1,7 @@
 # KManager
 
 <p align="center">
-  <img src="KManager-Client/logo.png" width="96" alt="KManager Logo" />
+  <img src="KManager-Client/logo.png" width="96" alt="KManager 图标" />
 </p>
 
 <p align="center">
@@ -18,7 +18,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/kmanager-cover.png" alt="KManager 战网账号管理器封面" />
+  <img src="docs/images/kmanager-cover.png" width="100%" alt="KManager 战网账号管理器封面" />
 </p>
 
 KManager 通过保存并切换 Battle.net 客户端的本地登录配置，让多个战网账号之间的切换更顺手。已经保存过的账号，后续通常可以直接切换进入登录状态，减少反复输入账号、等待验证码、重新登录的打断。
