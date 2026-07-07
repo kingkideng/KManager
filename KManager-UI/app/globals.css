@@ -29,3 +29,31 @@ input, textarea {
   user-select: auto;
   -webkit-user-select: auto;
 }
+
+select {
+  color-scheme: light;
+}
+
+select option {
+  background-color: #ffffff;
+  color: #1d1d1f;
+}
+
+select option:checked {
+  background-color: #e5e5e7;
+  color: #1d1d1f;
+}
+
+.dark select {
+  color-scheme: dark;
+}
+
+.dark select option {
+  background-color: #2c2c2e;
+  color: #f5f5f7;
+}
+
+.dark select option:checked {
+  background-color: #3a3a3c;
+  color: #ffffff;
+}

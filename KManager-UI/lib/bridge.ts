@@ -4,12 +4,26 @@ export interface Account {
   Username: string;
   LastUsed: string;
   GroupId: string;
+  Region?: string;
+  AvatarDataUrl?: string;
 }
 
 export interface Group {
   Id: string;
   Name: string;
   CreatedAt: string;
+}
+
+export interface SwitchAccountResult {
+  Success: boolean;
+  RequiresManualLaunch: boolean;
+  Error?: string;
+}
+
+export interface SaveAccountResult {
+  Success: boolean;
+  SessionStateSaved: boolean;
+  Error?: string;
 }
 
 class MockBridge {
@@ -62,43 +76,83 @@ class MockBridge {
     return true;
   }
 
-  async UpdateAccountInfo(accountId: string, remark: string, battleTag: string): Promise<boolean> {
+  private normalizeRegion(region: string): string {
+    return ['asia', 'americas', 'europe', 'cn'].includes(region) ? region : '';
+  }
+
+  async UpdateAccountInfo(accountId: string, remark: string, battleTag: string, region: string, avatarDataUrl: string): Promise<boolean> {
     const account = this.accounts.find(a => a.Id === accountId);
     if (!account) return false;
     account.Remark = remark.trim() || '未命名账号';
     account.Username = battleTag.trim();
+    account.Region = this.normalizeRegion(region);
+    account.AvatarDataUrl = avatarDataUrl || '';
     return true;
   }
 
-  async SaveCurrentAccount(remark: string, battleTag: string): Promise<boolean> {
-    return this.SaveCurrentAccountToGroup(remark, battleTag, 'default');
+  async SaveCurrentAccount(remark: string, battleTag: string, region: string, avatarDataUrl: string): Promise<boolean> {
+    return this.SaveCurrentAccountToGroup(remark, battleTag, 'default', region, avatarDataUrl);
   }
 
-  async SaveCurrentAccountToGroup(remark: string, battleTag: string, groupId: string): Promise<boolean> {
+  async SaveCurrentAccountDetailed(remark: string, battleTag: string, region: string, avatarDataUrl: string): Promise<string> {
+    return this.SaveCurrentAccountToGroupDetailed(remark, battleTag, 'default', region, avatarDataUrl);
+  }
+
+  async SaveCurrentAccountToGroup(remark: string, battleTag: string, groupId: string, region: string, avatarDataUrl: string): Promise<boolean> {
     this.accounts.push({
       Id: Math.random().toString(36).substring(7),
       Remark: remark || '未命名账号',
       Username: battleTag,
       LastUsed: new Date().toISOString(),
       GroupId: this.groups.some(g => g.Id === groupId) ? groupId : 'default',
+      Region: this.normalizeRegion(region),
+      AvatarDataUrl: avatarDataUrl || '',
     });
     return true;
   }
 
-  async SwitchAccount(id: string): Promise<void> {
+  async SaveCurrentAccountToGroupDetailed(remark: string, battleTag: string, groupId: string, region: string, avatarDataUrl: string): Promise<string> {
+    const success = await this.SaveCurrentAccountToGroup(remark, battleTag, groupId, region, avatarDataUrl);
+    return JSON.stringify({
+      Success: success,
+      SessionStateSaved: success,
+      Error: success ? '' : 'missing_config',
+    });
+  }
+
+  async RefreshAccountSessionState(id: string): Promise<boolean> {
+    const account = this.accounts.find(a => a.Id === id);
+    if (!account) return false;
+    account.LastUsed = new Date().toISOString();
+    return true;
+  }
+
+  async SwitchAccount(id: string): Promise<boolean> {
     console.log('Switching to account', id);
     const idx = this.accounts.findIndex(a => a.Id === id);
     if (idx !== -1) {
       this.accounts[idx].LastUsed = new Date().toISOString();
     }
+    return idx !== -1;
+  }
+
+  async SwitchAccountDetailed(id: string): Promise<string> {
+    const success = await this.SwitchAccount(id);
+    const account = this.accounts.find(a => a.Id === id);
+    return JSON.stringify({
+      Success: success,
+      RequiresManualLaunch: false,
+      Error: success ? (account?.Region ? '' : 'untagged_region') : 'missing_config',
+    });
   }
 
   async DeleteAccount(id: string): Promise<void> {
     this.accounts = this.accounts.filter(a => a.Id !== id);
   }
 
-  async AddNewAccount(): Promise<void> {
-    console.log('Mock: Opening Battle.net to add new account');
+  async AddNewAccount(region: string): Promise<boolean> {
+    console.log('Mock: Opening Battle.net to add new account', this.normalizeRegion(region));
+    return this.normalizeRegion(region) !== '';
   }
 
   async GetAutoStart(): Promise<boolean> {

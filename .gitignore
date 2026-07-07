@@ -10,6 +10,7 @@ KManager-Client/Data/
 KManager-Client/publish/
 
 # Node
+KManager-Client/node_modules/
 KManager-UI/node_modules/
 KManager-UI/.next/
 KManager-UI/out/

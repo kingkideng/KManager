@@ -14,6 +14,7 @@ namespace KManager
     {
         private const string WebView2BootstrapperPath = @"Resources\MicrosoftEdgeWebview2Setup.exe";
         private static readonly TimeSpan WebView2InstallTimeout = TimeSpan.FromSeconds(120);
+        private System.Drawing.Icon? _trayIcon;
         private bool _webViewInitialized;
 
         [DllImport("user32.dll")]
@@ -25,6 +26,8 @@ namespace KManager
         public MainWindow()
         {
             InitializeComponent();
+            Title = AppIdentity.DisplayName;
+            TrayIcon.ToolTipText = AppIdentity.DisplayName;
             ApplyResponsiveWindowSize();
             Loaded += async (_, _) => await InitializeWebViewAsync();
             try {
@@ -51,16 +54,44 @@ namespace KManager
         private void CreateAndSetIcon()
         {
             try {
+                var explicitIconPath = GetExplicitIconPath();
+                if (!string.IsNullOrEmpty(explicitIconPath) && File.Exists(explicitIconPath))
+                {
+                    using var explicitIcon = new System.Drawing.Icon(explicitIconPath);
+                    _trayIcon?.Dispose();
+                    _trayIcon = (System.Drawing.Icon)explicitIcon.Clone();
+                    TrayIcon.Icon = _trayIcon;
+                    Icon = System.Windows.Media.Imaging.BitmapFrame.Create(new Uri(explicitIconPath, UriKind.Absolute));
+                    return;
+                }
+
                 var appPath = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName;
                 if (string.IsNullOrEmpty(appPath))
                     return;
 
                 var icon = System.Drawing.Icon.ExtractAssociatedIcon(appPath);
                 if (icon != null) {
-                    TrayIcon.Icon = icon;
-                    this.Icon = System.Windows.Interop.Imaging.CreateBitmapSourceFromHIcon(icon.Handle, System.Windows.Int32Rect.Empty, System.Windows.Media.Imaging.BitmapSizeOptions.FromEmptyOptions());
+                    _trayIcon?.Dispose();
+                    _trayIcon = icon;
+                    TrayIcon.Icon = _trayIcon;
+                    Icon = System.Windows.Interop.Imaging.CreateBitmapSourceFromHIcon(icon.Handle, System.Windows.Int32Rect.Empty, System.Windows.Media.Imaging.BitmapSizeOptions.FromEmptyOptions());
                 }
             } catch { }
+        }
+
+        private static string? GetExplicitIconPath()
+        {
+#if KM_TEST_BUILD
+            return Path.Combine(AppContext.BaseDirectory, "app-beta.ico");
+#else
+            return null;
+#endif
+        }
+
+        protected override void OnClosed(EventArgs e)
+        {
+            base.OnClosed(e);
+            _trayIcon?.Dispose();
         }
 
         private async Task InitializeWebViewAsync()
@@ -95,7 +126,7 @@ namespace KManager
         {
             var cacheDir = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "KManager",
+                AppIdentity.AppName,
                 "WebView2Cache");
             Directory.CreateDirectory(cacheDir);
 

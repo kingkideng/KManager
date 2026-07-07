@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using System.Threading.Tasks;
 
 namespace KManager
 {
@@ -47,24 +48,45 @@ namespace KManager
             return _core.MoveAccountToGroup(accountId, groupId);
         }
 
-        public bool UpdateAccountInfo(string accountId, string remark, string battleTag)
+        public bool UpdateAccountInfo(string accountId, string remark, string battleTag, string region, string avatarDataUrl)
         {
-            return _core.UpdateAccountInfo(accountId, remark, battleTag);
+            return _core.UpdateAccountInfo(accountId, remark, battleTag, region, avatarDataUrl);
         }
 
-        public bool SaveCurrentAccount(string remark, string battleTag)
+        public bool SaveCurrentAccount(string remark, string battleTag, string region, string avatarDataUrl)
         {
-            return _core.SaveCurrentAccount(remark, battleTag);
+            return _core.SaveCurrentAccount(remark, battleTag, region, avatarDataUrl);
         }
 
-        public bool SaveCurrentAccountToGroup(string remark, string battleTag, string groupId)
+        public string SaveCurrentAccountDetailed(string remark, string battleTag, string region, string avatarDataUrl)
         {
-            return _core.SaveCurrentAccountToGroup(remark, battleTag, groupId);
+            return JsonSerializer.Serialize(_core.SaveCurrentAccountDetailed(remark, battleTag, region, avatarDataUrl));
         }
 
-        public void SwitchAccount(string id)
+        public bool SaveCurrentAccountToGroup(string remark, string battleTag, string groupId, string region, string avatarDataUrl)
         {
-            _ = _core.SwitchAccountAsync(id);
+            return _core.SaveCurrentAccountToGroup(remark, battleTag, groupId, region, avatarDataUrl);
+        }
+
+        public string SaveCurrentAccountToGroupDetailed(string remark, string battleTag, string groupId, string region, string avatarDataUrl)
+        {
+            return JsonSerializer.Serialize(_core.SaveCurrentAccountToGroupDetailed(remark, battleTag, groupId, region, avatarDataUrl));
+        }
+
+        public bool RefreshAccountSessionState(string id)
+        {
+            return _core.RefreshAccountSessionState(id);
+        }
+
+        public bool SwitchAccount(string id)
+        {
+            return Task.Run(() => _core.SwitchAccountAsync(id)).GetAwaiter().GetResult();
+        }
+
+        public string SwitchAccountDetailed(string id)
+        {
+            var result = Task.Run(() => _core.SwitchAccountDetailedAsync(id)).GetAwaiter().GetResult();
+            return JsonSerializer.Serialize(result);
         }
 
         public void DeleteAccount(string id)
@@ -72,9 +94,9 @@ namespace KManager
             _core.DeleteAccount(id);
         }
 
-        public void AddNewAccount()
+        public bool AddNewAccount(string region)
         {
-            _ = _core.AddNewAccountAsync();
+            return Task.Run(() => _core.AddNewAccountAsync(region)).GetAwaiter().GetResult();
         }
 
         public bool GetAutoStart() => _core.GetAutoStartStatus();

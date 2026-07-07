@@ -1,5 +1,15 @@
 # Changelog
 
+## v2.0 - 2026-07-07
+
+- Added explicit account regions: Asia, Americas, Europe and China.
+- Added region-aware Battle.net switching with local session-state snapshots, limited cache cleanup and auth-state restore.
+- Added account avatar customization, account deletion from the card menu, and manual login-state refresh.
+- Added a region selector when opening Battle.net to log in a new account.
+- Added first-run help, legacy-upgrade guidance and FAQ inside the app.
+- Preserved old accounts without region tags by opening them with the legacy switching path first, then guiding users to fill the region and update login state.
+- Added automatic import from the isolated beta data directory into the official app data directory.
+
 ## v1.1.4 - 2026-06-16
 
 - Optimized WebView2 background memory footprint. The app now trims its memory aggressively to ~30MB when minimized or hidden to the system tray.

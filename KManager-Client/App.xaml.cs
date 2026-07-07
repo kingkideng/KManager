@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows;
 
@@ -9,16 +10,16 @@ namespace KManager;
 /// </summary>
 public partial class App : Application
 {
-    private const string SingleInstanceMutexName = @"Local\KManager.SingleInstance";
-    private const string ShowMainWindowEventName = @"Local\KManager.ShowMainWindow";
-
     private Mutex? _singleInstanceMutex;
     private EventWaitHandle? _showMainWindowEvent;
     private RegisteredWaitHandle? _showMainWindowRegistration;
 
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+    private static extern int SetCurrentProcessExplicitAppUserModelID(string appId);
+
     protected override void OnStartup(StartupEventArgs e)
     {
-        _singleInstanceMutex = new Mutex(true, SingleInstanceMutexName, out var createdNew);
+        _singleInstanceMutex = new Mutex(true, AppIdentity.SingleInstanceMutexName, out var createdNew);
         if (!createdNew)
         {
             SignalExistingInstance();
@@ -26,9 +27,10 @@ public partial class App : Application
             return;
         }
 
+        SetAppUserModelId();
         base.OnStartup(e);
 
-        _showMainWindowEvent = new EventWaitHandle(false, EventResetMode.AutoReset, ShowMainWindowEventName);
+        _showMainWindowEvent = new EventWaitHandle(false, EventResetMode.AutoReset, AppIdentity.ShowMainWindowEventName);
         _showMainWindowRegistration = ThreadPool.RegisterWaitForSingleObject(
             _showMainWindowEvent,
             (_, _) => Dispatcher.BeginInvoke(ShowMainWindow),
@@ -62,8 +64,19 @@ public partial class App : Application
     {
         try
         {
-            using var showEvent = EventWaitHandle.OpenExisting(ShowMainWindowEventName);
+            using var showEvent = EventWaitHandle.OpenExisting(AppIdentity.ShowMainWindowEventName);
             showEvent.Set();
+        }
+        catch
+        {
+        }
+    }
+
+    private static void SetAppUserModelId()
+    {
+        try
+        {
+            SetCurrentProcessExplicitAppUserModelID(AppIdentity.AppUserModelId);
         }
         catch
         {
