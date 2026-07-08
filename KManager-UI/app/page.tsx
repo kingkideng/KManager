@@ -106,9 +106,26 @@ export default function App() {
 
   const visibleAccountIds = useMemo(() => visibleAccounts.map(account => account.Id).join('|'), [visibleAccounts]);
 
-  const loadData = async () => {
+  const waitForCoreReady = async (bridge: any) => {
+    if (typeof bridge.IsCoreReady !== 'function') {
+      return;
+    }
+
+    while (!(await bridge.IsCoreReady())) {
+      await new Promise(resolve => setTimeout(resolve, 250));
+    }
+
+    if (typeof bridge.GetCoreInitializationError === 'function') {
+      const error = await bridge.GetCoreInitializationError();
+      if (error) {
+        throw new Error(error);
+      }
+    }
+  };
+
+  const loadData = async (providedBridge?: any) => {
     try {
-      const bridge = getBridge();
+      const bridge = providedBridge ?? getBridge();
       const [accountsJson, groupsJson] = await Promise.all([
         bridge.GetAccounts(),
         bridge.GetGroups(),
@@ -161,7 +178,8 @@ export default function App() {
     const init = async () => {
       try {
         const bridge = getBridge();
-        await loadData();
+        await waitForCoreReady(bridge);
+        await loadData(bridge);
         const auto = await bridge.GetAutoStart();
         setAutoStart(auto);
         try {
@@ -439,7 +457,40 @@ export default function App() {
       return;
     }
 
+    if (error === 'client_exit_timeout') {
+      showTopNotice('切换失败：Battle.net 没有完全退出。请从战网托盘菜单退出 Battle.net，确认窗口和托盘都消失后再重试。', 'error');
+      return;
+    }
+
     showTopNotice('切换失败：未找到账号配置，或未能确认战网已完全退出。', 'error');
+  };
+
+  const getSessionCaptureWarning = (error?: string) => {
+    if (error === 'client_exit_timeout') {
+      return '账号基础信息已保存，但 Battle.net 没有完全退出，未能采集完整登录状态。请从战网托盘菜单退出 Battle.net 后，在账号菜单点“更新登录状态”。';
+    }
+
+    if (error === 'missing_session_snapshot') {
+      return '账号基础信息已保存，但当前登录状态不完整。请确认战网已登录到主界面，再在账号菜单点“更新登录状态”。';
+    }
+
+    return '账号已保存，但未采集到完整登录状态；切换时可能需要重新登录后更新状态。';
+  };
+
+  const getSessionCaptureError = (error?: string) => {
+    if (error === 'client_exit_timeout') {
+      return '更新登录状态失败：Battle.net 没有完全退出。请从战网托盘菜单退出 Battle.net，确认窗口和托盘都消失后再重试。';
+    }
+
+    if (error === 'missing_session_snapshot') {
+      return '更新登录状态失败：没有采集到完整登录状态。请确认战网已登录到主界面，再重新更新。';
+    }
+
+    if (error === 'missing_config') {
+      return '更新登录状态失败：未找到战网配置文件。请先登录一次 Battle.net。';
+    }
+
+    return '更新登录状态失败：请确认战网已登录，并允许 KManager 先关闭战网后采集状态。';
   };
 
   const moveAccountToGroup = async (accountId: string, groupId: string) => {
@@ -604,12 +655,16 @@ export default function App() {
 
     try {
       const bridge = getBridge();
-      const refreshed = typeof bridge.RefreshAccountSessionState === 'function'
-        ? await bridge.RefreshAccountSessionState(id)
-        : false;
+      const refreshResult = normalizeSaveAccountResult(
+        typeof bridge.RefreshAccountSessionStateDetailed === 'function'
+          ? await bridge.RefreshAccountSessionStateDetailed(id)
+          : typeof bridge.RefreshAccountSessionState === 'function'
+            ? await bridge.RefreshAccountSessionState(id)
+            : false
+      );
 
-      if (!refreshed) {
-        showTopNotice('更新登录状态失败：请确认战网已登录，并允许 KManager 先关闭战网后采集状态。', 'error');
+      if (!refreshResult.Success || !refreshResult.SessionStateSaved) {
+        showTopNotice(getSessionCaptureError(refreshResult.Error), 'error');
         return;
       }
 
@@ -719,7 +774,7 @@ export default function App() {
         showTopNotice(
           saveResult.SessionStateSaved
             ? '已保存账号和登录状态。若战网原本打开，KManager 已重新打开。'
-            : '账号已保存，但未采集到完整登录状态；切换时可能需要重新登录后更新状态。',
+            : getSessionCaptureWarning(saveResult.Error),
           saveResult.SessionStateSaved ? 'success' : 'warning'
         );
         await loadData();

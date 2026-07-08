@@ -17,12 +17,14 @@ namespace KManager.Core
         private readonly string _accountsJsonPath;
         private readonly string _groupsJsonPath;
         private readonly string _configFilePath;
+        private readonly string _migrationStatePath;
 
         public BattleNetCore()
         {
             _configFilePath = Path.Combine(_appDataPath, "Battle.net.config");
             _accountsJsonPath = Path.Combine(_dataDir, "accounts.json");
             _groupsJsonPath = Path.Combine(_dataDir, "groups.json");
+            _migrationStatePath = Path.Combine(_dataDir, "migration-state.json");
             MigrateLegacyDataIfNeeded();
             if (!Directory.Exists(_dataDir))
                 Directory.CreateDirectory(_dataDir);
@@ -246,20 +248,25 @@ namespace KManager.Core
 
         public bool RefreshAccountSessionState(string id)
         {
-            return RefreshAccountSessionStateAsync(id)
+            return RefreshAccountSessionStateDetailed(id).Success;
+        }
+
+        public SaveAccountResult RefreshAccountSessionStateDetailed(string id)
+        {
+            return RefreshAccountSessionStateDetailedAsync(id)
                 .GetAwaiter()
                 .GetResult();
         }
 
-        private async Task<bool> RefreshAccountSessionStateAsync(string id)
+        private async Task<SaveAccountResult> RefreshAccountSessionStateDetailedAsync(string id)
         {
             if (!File.Exists(_configFilePath))
-                return false;
+                return new SaveAccountResult { Success = false, Error = "missing_config" };
 
             var accounts = GetAccounts();
             var account = accounts.FirstOrDefault(a => a.Id == id);
             if (account == null)
-                return false;
+                return new SaveAccountResult { Success = false, Error = "missing_account" };
 
             var wasBattleNetRunning = IsBattleNetClientRunning();
             var prepareSucceeded = await PrepareBattleNetSessionCaptureAsync().ConfigureAwait(false);
@@ -269,19 +276,19 @@ namespace KManager.Core
             try
             {
                 if (!prepareSucceeded)
-                    return false;
+                    return new SaveAccountResult { Success = false, Error = "client_exit_timeout" };
 
                 if (!File.Exists(_configFilePath))
-                    return false;
+                    return new SaveAccountResult { Success = false, Error = "missing_config" };
 
                 var accountDir = Path.Combine(_dataDir, id);
                 Directory.CreateDirectory(accountDir);
                 if (!TrySaveCurrentBattleNetSessionSnapshot(accountDir, account.Region, requireExactRegion: false))
-                    return false;
+                    return new SaveAccountResult { Success = false, Error = "missing_session_snapshot" };
 
                 account.LastUsed = DateTime.Now;
                 SaveAccounts(accounts);
-                return true;
+                return new SaveAccountResult { Success = true, SessionStateSaved = true };
             }
             finally
             {
@@ -1776,16 +1783,37 @@ namespace KManager.Core
 
         private void MigrateLegacyDataIfNeeded()
         {
-            try
-            {
-                Directory.CreateDirectory(_dataDir);
+            Directory.CreateDirectory(_dataDir);
 
-                foreach (var legacyDataDir in GetLegacyDataDirectories())
-                    MergeLegacyData(legacyDataDir, IsBetaUpgradeDataDirectory(legacyDataDir));
-            }
-            catch
+            var state = ReadMigrationState();
+            var stateChanged = false;
+
+            foreach (var legacyDataDir in GetLegacyDataDirectories())
             {
+                var preferLegacyData = IsBetaUpgradeDataDirectory(legacyDataDir);
+                try
+                {
+                    if (HasMigratedDataDirectory(state, legacyDataDir, preferLegacyData))
+                        continue;
+
+                    if (preferLegacyData && LooksLikeDataDirectoryAlreadyImported(legacyDataDir))
+                    {
+                        RememberMigratedDataDirectory(state, legacyDataDir, preferLegacyData);
+                        stateChanged = true;
+                        continue;
+                    }
+
+                    MergeLegacyData(legacyDataDir, preferLegacyData);
+                    RememberMigratedDataDirectory(state, legacyDataDir, preferLegacyData);
+                    stateChanged = true;
+                }
+                catch
+                {
+                }
             }
+
+            if (stateChanged)
+                SaveMigrationState(state);
         }
 
         private IEnumerable<string> GetLegacyDataDirectories()
@@ -2070,6 +2098,113 @@ namespace KManager.Core
                 TryDeleteDirectory(destinationDir);
 
             CopyDirectory(sourceDir, destinationDir, overwriteExisting);
+        }
+
+        private LegacyMigrationState ReadMigrationState()
+        {
+            try
+            {
+                if (!File.Exists(_migrationStatePath))
+                    return new LegacyMigrationState();
+
+                return JsonSerializer.Deserialize<LegacyMigrationState>(File.ReadAllText(_migrationStatePath))
+                    ?? new LegacyMigrationState();
+            }
+            catch
+            {
+                return new LegacyMigrationState();
+            }
+        }
+
+        private void SaveMigrationState(LegacyMigrationState state)
+        {
+            try
+            {
+                File.WriteAllText(_migrationStatePath, JsonSerializer.Serialize(state));
+            }
+            catch
+            {
+            }
+        }
+
+        private static bool HasMigratedDataDirectory(
+            LegacyMigrationState state,
+            string legacyDataDir,
+            bool preferLegacyData)
+        {
+            var normalizedPath = NormalizePath(legacyDataDir);
+            return state.DataDirectories.Any(item =>
+                item.PreferLegacyData == preferLegacyData
+                && string.Equals(item.Path, normalizedPath, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static void RememberMigratedDataDirectory(
+            LegacyMigrationState state,
+            string legacyDataDir,
+            bool preferLegacyData)
+        {
+            var normalizedPath = NormalizePath(legacyDataDir);
+            var existing = state.DataDirectories.FirstOrDefault(item =>
+                item.PreferLegacyData == preferLegacyData
+                && string.Equals(item.Path, normalizedPath, StringComparison.OrdinalIgnoreCase));
+
+            if (existing == null)
+            {
+                state.DataDirectories.Add(new LegacyMigrationDataDirectory
+                {
+                    Path = normalizedPath,
+                    PreferLegacyData = preferLegacyData,
+                    ImportedAtUtc = DateTime.UtcNow
+                });
+                return;
+            }
+
+            existing.ImportedAtUtc = DateTime.UtcNow;
+        }
+
+        private bool LooksLikeDataDirectoryAlreadyImported(string legacyDataDir)
+        {
+            var legacyAccountsPath = Path.Combine(legacyDataDir, "accounts.json");
+            if (!File.Exists(legacyAccountsPath) || !File.Exists(_accountsJsonPath))
+                return false;
+
+            var legacyAccountIds = GetImportableAccountIds(legacyDataDir);
+            if (legacyAccountIds.Count == 0)
+                return false;
+
+            var currentAccountIds = ReadAccountsFromFile(_accountsJsonPath)
+                .Select(account => account.Id)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            if (!legacyAccountIds.All(currentAccountIds.Contains))
+                return false;
+
+            if (File.GetLastWriteTimeUtc(_accountsJsonPath) < File.GetLastWriteTimeUtc(legacyAccountsPath))
+                return false;
+
+            return legacyAccountIds.All(accountId =>
+                Directory.Exists(Path.Combine(_dataDir, accountId))
+                && File.Exists(Path.Combine(_dataDir, accountId, "Battle.net.config")));
+        }
+
+        private static HashSet<string> GetImportableAccountIds(string legacyDataDir)
+        {
+            var accountIds = ReadAccountsFromFile(Path.Combine(legacyDataDir, "accounts.json"))
+                .Where(account => !string.IsNullOrWhiteSpace(account.Id))
+                .Select(account => account.Id)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var accountDir in Directory.GetDirectories(legacyDataDir))
+            {
+                var accountId = Path.GetFileName(accountDir);
+                if (!string.IsNullOrWhiteSpace(accountId)
+                    && File.Exists(Path.Combine(accountDir, "Battle.net.config")))
+                {
+                    accountIds.Add(accountId);
+                }
+            }
+
+            return accountIds;
         }
 
         private static List<AccountInfo> ReadAccountsFromFile(string path)

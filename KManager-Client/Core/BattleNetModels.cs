@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace KManager.Core
 {
@@ -45,6 +46,18 @@ namespace KManager.Core
     internal class BattleNetSessionStateMetadata
     {
         public DateTime CapturedAtUtc { get; set; } = DateTime.UtcNow;
+    }
+
+    internal class LegacyMigrationState
+    {
+        public List<LegacyMigrationDataDirectory> DataDirectories { get; set; } = new();
+    }
+
+    internal class LegacyMigrationDataDirectory
+    {
+        public string Path { get; set; } = "";
+        public bool PreferLegacyData { get; set; }
+        public DateTime ImportedAtUtc { get; set; } = DateTime.UtcNow;
     }
 
     internal class BattleNetRegionSettings

@@ -44,6 +44,14 @@ class MockBridge {
     return JSON.stringify(this.groups);
   }
 
+  async IsCoreReady(): Promise<boolean> {
+    return true;
+  }
+
+  async GetCoreInitializationError(): Promise<string> {
+    return '';
+  }
+
   async CreateGroup(name: string): Promise<string> {
     const group = {
       Id: Math.random().toString(36).substring(7),
@@ -125,6 +133,15 @@ class MockBridge {
     if (!account) return false;
     account.LastUsed = new Date().toISOString();
     return true;
+  }
+
+  async RefreshAccountSessionStateDetailed(id: string): Promise<string> {
+    const success = await this.RefreshAccountSessionState(id);
+    return JSON.stringify({
+      Success: success,
+      SessionStateSaved: success,
+      Error: success ? '' : 'missing_account',
+    });
   }
 
   async SwitchAccount(id: string): Promise<boolean> {

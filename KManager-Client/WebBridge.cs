@@ -16,92 +16,116 @@ namespace KManager
         public static extern bool ReleaseCapture();
         public const int WM_NCLBUTTONDOWN = 0xA1;
         public const int HT_CAPTION = 0x2;
-        private readonly Core.BattleNetCore _core = new Core.BattleNetCore();
+        private readonly Task<Core.BattleNetCore> _coreTask;
+
+        public WebBridge()
+        {
+            _coreTask = Task.Run(() => new Core.BattleNetCore());
+        }
+
+        private Core.BattleNetCore Core => _coreTask.GetAwaiter().GetResult();
+
+        public bool IsCoreReady()
+        {
+            return _coreTask.IsCompleted;
+        }
+
+        public string GetCoreInitializationError()
+        {
+            return _coreTask.IsFaulted
+                ? _coreTask.Exception?.GetBaseException().Message ?? "core_init_failed"
+                : "";
+        }
 
         public string GetAccounts()
         {
-            return JsonSerializer.Serialize(_core.GetAccounts());
+            return JsonSerializer.Serialize(Core.GetAccounts());
         }
 
         public string GetGroups()
         {
-            return JsonSerializer.Serialize(_core.GetGroups());
+            return JsonSerializer.Serialize(Core.GetGroups());
         }
 
         public string CreateGroup(string name)
         {
-            return JsonSerializer.Serialize(_core.CreateGroup(name));
+            return JsonSerializer.Serialize(Core.CreateGroup(name));
         }
 
         public bool RenameGroup(string id, string name)
         {
-            return _core.RenameGroup(id, name);
+            return Core.RenameGroup(id, name);
         }
 
         public bool DeleteGroup(string id)
         {
-            return _core.DeleteGroup(id);
+            return Core.DeleteGroup(id);
         }
 
         public bool MoveAccountToGroup(string accountId, string groupId)
         {
-            return _core.MoveAccountToGroup(accountId, groupId);
+            return Core.MoveAccountToGroup(accountId, groupId);
         }
 
         public bool UpdateAccountInfo(string accountId, string remark, string battleTag, string region, string avatarDataUrl)
         {
-            return _core.UpdateAccountInfo(accountId, remark, battleTag, region, avatarDataUrl);
+            return Core.UpdateAccountInfo(accountId, remark, battleTag, region, avatarDataUrl);
         }
 
         public bool SaveCurrentAccount(string remark, string battleTag, string region, string avatarDataUrl)
         {
-            return _core.SaveCurrentAccount(remark, battleTag, region, avatarDataUrl);
+            return Core.SaveCurrentAccount(remark, battleTag, region, avatarDataUrl);
         }
 
         public string SaveCurrentAccountDetailed(string remark, string battleTag, string region, string avatarDataUrl)
         {
-            return JsonSerializer.Serialize(_core.SaveCurrentAccountDetailed(remark, battleTag, region, avatarDataUrl));
+            return JsonSerializer.Serialize(Core.SaveCurrentAccountDetailed(remark, battleTag, region, avatarDataUrl));
         }
 
         public bool SaveCurrentAccountToGroup(string remark, string battleTag, string groupId, string region, string avatarDataUrl)
         {
-            return _core.SaveCurrentAccountToGroup(remark, battleTag, groupId, region, avatarDataUrl);
+            return Core.SaveCurrentAccountToGroup(remark, battleTag, groupId, region, avatarDataUrl);
         }
 
         public string SaveCurrentAccountToGroupDetailed(string remark, string battleTag, string groupId, string region, string avatarDataUrl)
         {
-            return JsonSerializer.Serialize(_core.SaveCurrentAccountToGroupDetailed(remark, battleTag, groupId, region, avatarDataUrl));
+            return JsonSerializer.Serialize(Core.SaveCurrentAccountToGroupDetailed(remark, battleTag, groupId, region, avatarDataUrl));
         }
 
         public bool RefreshAccountSessionState(string id)
         {
-            return _core.RefreshAccountSessionState(id);
+            return Core.RefreshAccountSessionState(id);
+        }
+
+        public string RefreshAccountSessionStateDetailed(string id)
+        {
+            return JsonSerializer.Serialize(Core.RefreshAccountSessionStateDetailed(id));
         }
 
         public bool SwitchAccount(string id)
         {
-            return Task.Run(() => _core.SwitchAccountAsync(id)).GetAwaiter().GetResult();
+            return Task.Run(() => Core.SwitchAccountAsync(id)).GetAwaiter().GetResult();
         }
 
         public string SwitchAccountDetailed(string id)
         {
-            var result = Task.Run(() => _core.SwitchAccountDetailedAsync(id)).GetAwaiter().GetResult();
+            var result = Task.Run(() => Core.SwitchAccountDetailedAsync(id)).GetAwaiter().GetResult();
             return JsonSerializer.Serialize(result);
         }
 
         public void DeleteAccount(string id)
         {
-            _core.DeleteAccount(id);
+            Core.DeleteAccount(id);
         }
 
         public bool AddNewAccount(string region)
         {
-            return Task.Run(() => _core.AddNewAccountAsync(region)).GetAwaiter().GetResult();
+            return Task.Run(() => Core.AddNewAccountAsync(region)).GetAwaiter().GetResult();
         }
 
-        public bool GetAutoStart() => _core.GetAutoStartStatus();
+        public bool GetAutoStart() => Core.GetAutoStartStatus();
         
-        public void SetAutoStart(bool enabled) => _core.SetAutoStart(enabled);
+        public void SetAutoStart(bool enabled) => Core.SetAutoStart(enabled);
 
         public bool OpenExternalUrl(string url)
         {
