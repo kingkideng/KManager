@@ -1,6 +1,6 @@
 # Changelog
 
-## v2.0 - 2026-07-07
+## v2.0 - 2026-07-07 (updated 2026-07-10)
 
 - Added explicit account regions: Asia, Americas, Europe and China.
 - Added region-aware Battle.net switching with local session-state snapshots, limited cache cleanup and auth-state restore.
@@ -9,6 +9,10 @@
 - Added first-run help, legacy-upgrade guidance and FAQ inside the app.
 - Preserved old accounts without region tags by opening them with the legacy switching path first, then guiding users to fill the region and update login state.
 - Added automatic import from the isolated beta data directory into the official app data directory.
+- Fixed first-start hangs caused by repeatedly importing large legacy or beta session-state directories.
+- Moved core initialization off the UI thread and added a persisted migration-state record so completed imports are not copied again.
+- Added clearer errors for Battle.net exit timeouts, missing configuration and incomplete session-state capture.
+- Refreshed the packaged frontend and final release branding assets.
 
 ## v1.1.4 - 2026-06-16
 
