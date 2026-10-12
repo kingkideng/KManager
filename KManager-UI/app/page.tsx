@@ -1479,13 +1479,13 @@ export default function App() {
               animate={{ y: 0, opacity: 1, scale: 1 }}
               exit={{ y: "20%", opacity: 0, scale: 0.95, transition: { ease: "anticipate", duration: 0.2 } }}
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
-              className={`w-full sm:max-w-[340px] rounded-t-[32px] sm:rounded-[32px] p-6 shadow-2xl border relative z-10 flex flex-col m-0 sm:m-4 max-h-[90vh] ${
+              className={`w-full sm:max-w-[340px] rounded-t-[32px] sm:rounded-[32px] p-6 shadow-2xl border relative z-10 flex flex-col m-0 sm:m-4 max-h-[90vh] overflow-hidden ${
                 isDarkMode ? 'bg-[#18181A] border-white/10' : 'bg-white border-black/5'
               }`}
             >
-              <div className={`w-12 h-1.5 rounded-full mx-auto mb-6 sm:hidden ${isDarkMode ? 'bg-white/10' : 'bg-black/10'}`} />
+              <div className={`w-12 h-1.5 flex-shrink-0 rounded-full mx-auto mb-6 sm:hidden ${isDarkMode ? 'bg-white/10' : 'bg-black/10'}`} />
               
-              <div className="flex justify-between items-center mb-6">
+              <div className="flex justify-between items-center flex-shrink-0 mb-6">
                 <h3 className={`text-[18px] font-semibold tracking-tight ${isDarkMode ? 'text-white' : 'text-black'}`}>
                   {modalMode === 'select' ? '选择操作' : modalMode === 'edit' ? '编辑账号' : '录入账号'}
                 </h3>
@@ -1500,7 +1500,7 @@ export default function App() {
               </div>
 
               {modalMode === 'select' ? (
-                <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-3 min-h-0 overflow-y-auto overscroll-contain">
                   <button
                     onClick={() => setModalMode('save')}
                     className={`flex items-center gap-4 p-4 rounded-[20px] transition-colors border border-transparent active:scale-[0.98] group text-left ${
@@ -1575,8 +1575,8 @@ export default function App() {
                   </div>
                 </div>
               ) : (
-                <div className="flex flex-col flex-1">
-                  <div className="space-y-5 mb-2">
+                <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+                  <div className="space-y-5 mb-2 flex-auto min-h-0 overflow-y-auto overscroll-contain">
                     <div className="flex items-center gap-4">
                       <div className={`w-16 h-16 flex-shrink-0 overflow-hidden rounded-[20px] border ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-black/[0.03] border-black/10'}`}>
                         {accountAvatarDataUrl ? (
@@ -1701,7 +1701,7 @@ export default function App() {
                         initial={{ opacity: 0, height: 0, marginTop: 0 }}
                         animate={{ opacity: 1, height: "auto", marginTop: 12 }}
                         exit={{ opacity: 0, height: 0, marginTop: 0 }}
-                        className="text-[12px] text-[#FF3B30] flex items-center gap-1.5 overflow-hidden font-medium bg-[#FF3B30]/10 border border-[#FF3B30]/20 p-3 rounded-[12px]"
+                        className="text-[12px] text-[#FF3B30] flex flex-shrink-0 items-center gap-1.5 overflow-hidden font-medium bg-[#FF3B30]/10 border border-[#FF3B30]/20 p-3 rounded-[12px]"
                       >
                         <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
                         <span>{saveError}</span>
@@ -1709,7 +1709,7 @@ export default function App() {
                     )}
                   </AnimatePresence>
 
-                  <div className="flex gap-3 mt-8 pb-1">
+                  <div className="flex flex-shrink-0 gap-3 mt-8 pb-1">
                     <button
                       onClick={() => {
                         if (modalMode === 'edit') {

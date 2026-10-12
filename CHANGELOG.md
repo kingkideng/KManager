@@ -1,5 +1,12 @@
 # Changelog
 
+## v2.0.1 - 2026-10-12
+
+- Fixed clipped save/edit buttons in the account dialog on short viewports, including low-resolution and larger display-scaling configurations.
+- Made the middle field list scrollable while keeping the title, error message and action buttons visible.
+- Added scrolling to the operation-selection dialog and preserved light/dark themes and narrow-window behavior.
+- Rebuilt the packaged frontend. Account storage, migration and Battle.net switching behavior remain on the v2.0 production baseline.
+
 ## v2.0 - 2026-07-07 (updated 2026-07-10)
 
 - Added explicit account regions: Asia, Americas, Europe and China.

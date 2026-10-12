@@ -23,7 +23,12 @@
 
 KManager 通过保存并切换 Battle.net 客户端的本地登录配置，让多个战网账号之间的切换更顺手。已经保存过的账号，后续通常可以直接切换进入登录状态，减少反复输入账号、等待验证码、重新登录的打断。
 
-> 当前版本：v2.0
+> 当前版本：v2.0.1
+
+## v2.0.1 更新重点
+
+- 修复部分低分辨率或较大缩放环境下，录入/编辑账号弹窗的保存按钮被截掉、无法向下滚动的问题。
+- 表单内容可独立滚动，标题和底部操作按钮保持可见；选择操作与错误提示场景一并适配。
 
 ## v2.0 更新重点
 
@@ -51,13 +56,13 @@ KManager 不绕过战网官方验证。已保存且会话有效的账号通常�
 推荐普通用户下载并运行：
 
 ```text
-KManager_Setup_v2.0.exe
+KManager_Setup_v2.0.1.exe
 ```
 
 如果你更喜欢绿色版，也可以下载：
 
 ```text
-KManager-v2.0-win-x64.zip
+KManager-v2.0.1-win-x64.zip
 ```
 
 解压后运行其中的 `KManager.exe`。
@@ -115,7 +120,7 @@ KManager 会自动关闭 Battle.net 和 Agent 进程，替换为目标账号的�
 如果你之前使用过旧版本：
 
 1. 关闭 KManager 和 Battle.net 客户端。
-2. 直接运行新版 `KManager_Setup_v2.0.exe` 覆盖安装。
+2. 直接运行新版 `KManager_Setup_v2.0.1.exe` 覆盖安装。
 3. 启动 KManager，旧账号会自动保留；beta 测试版数据也会自动导入正式版。
 
 没有区服标签的旧账号会显示“待标记区服”。你可以先点击“登录此号”按旧版方式打开战网；确认账号登录成功后，回到 KManager 编辑账号补充区服，再点击“更新登录状态”。
@@ -265,7 +270,7 @@ iscc installer/KManager.iss
 安装包输出到：
 
 ```text
-../ReleaseAssets/KManager_Setup_v2.0.exe
+../ReleaseAssets/KManager_Setup_v2.0.1.exe
 ```
 
 ## 许可协议

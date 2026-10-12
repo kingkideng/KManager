@@ -1,9 +1,11 @@
 #define MyAppName "KManager"
-#define MyAppVersion "2.0"
+#define MyAppVersion "2.0.1"
 #define MyAppPublisher "kingkideng"
 #define MyAppURL "https://github.com/kingkideng/KManager"
 #define MyAppExeName "KManager.exe"
+#ifndef PublishDir
 #define PublishDir "..\KManager-Client\bin\Release\net8.0-windows\win-x64\publish"
+#endif
 #define OutputDir "..\..\ReleaseAssets"
 
 [Setup]
@@ -31,7 +33,7 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 CloseApplications=yes
 RestartApplications=no
-VersionInfoVersion=2.0.0.0
+VersionInfoVersion=2.0.1.0
 VersionInfoCompany={#MyAppPublisher}
 VersionInfoDescription={#MyAppName} Setup
 VersionInfoProductName={#MyAppName}
